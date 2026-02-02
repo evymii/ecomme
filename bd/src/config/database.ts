@@ -10,10 +10,11 @@ export const connectDB = async (): Promise<void> => {
     // Reuse existing connection if available
     if (cachedConnection && mongoose.connection.readyState === 1) {
       console.log('Using existing MongoDB connection');
-      // Fix indexes once on first connection
+      // Fix indexes asynchronously (non-blocking)
       if (!indexesFixed) {
         indexesFixed = true;
-        await fixDatabaseIndexes();
+        // Don't await - run in background to avoid blocking requests
+        fixDatabaseIndexes().catch(err => console.error('Index fix error:', err));
       }
       return;
     }
@@ -31,17 +32,19 @@ export const connectDB = async (): Promise<void> => {
     }
 
     cachedConnection = await mongoose.connect(mongoURI, {
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
+      serverSelectionTimeoutMS: 5000, // Reduced from 10000 to 5000ms
+      socketTimeoutMS: 30000, // Reduced from 45000 to 30000ms
+      connectTimeoutMS: 5000, // Add connection timeout
     });
     
     console.log('✅ MongoDB connected successfully');
     console.log(`   Database: ${mongoose.connection.db?.databaseName}`);
     
-    // Fix indexes once on first connection
+    // Fix indexes asynchronously (non-blocking)
     if (!indexesFixed) {
       indexesFixed = true;
-      await fixDatabaseIndexes();
+      // Don't await - run in background to avoid blocking requests
+      fixDatabaseIndexes().catch(err => console.error('Index fix error:', err));
     }
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);

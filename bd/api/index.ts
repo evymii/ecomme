@@ -85,6 +85,16 @@ async function connectToDatabase() {
 
 // Export serverless function for Vercel
 export default async function handler(req: express.Request, res: express.Response) {
+  // Set timeout to prevent hanging
+  const timeout = setTimeout(() => {
+    if (!res.headersSent) {
+      res.status(504).json({
+        success: false,
+        message: 'Request timeout'
+      });
+    }
+  }, 25000); // 25 seconds timeout (before 30s maxDuration)
+
   try {
     // Skip database connection for health check
     const isHealthCheck = req.url === '/api/health' || req.url?.startsWith('/api/health');
@@ -92,8 +102,14 @@ export default async function handler(req: express.Request, res: express.Respons
     if (!isHealthCheck) {
       // Connect to database on each request (connection is cached)
       try {
-        await connectToDatabase();
+        await Promise.race([
+          connectToDatabase(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Database connection timeout')), 8000)
+          )
+        ]);
       } catch (dbError: any) {
+        clearTimeout(timeout);
         console.error('Database connection failed:', dbError);
         if (!res.headersSent) {
           res.status(503).json({
@@ -109,6 +125,7 @@ export default async function handler(req: express.Request, res: express.Respons
     // Handle the request
     return new Promise((resolve, reject) => {
       app(req, res, (err: any) => {
+        clearTimeout(timeout);
         if (err) {
           reject(err);
         } else {
@@ -117,6 +134,7 @@ export default async function handler(req: express.Request, res: express.Respons
       });
     });
   } catch (error: any) {
+    clearTimeout(timeout);
     console.error('Serverless function error:', error);
     if (!res.headersSent) {
       res.status(500).json({
