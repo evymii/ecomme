@@ -9,8 +9,7 @@
     "dev": "nodemon",
     "build": "tsc",
     "start": "node dist/server.js",
-    "seed": "tsx src/seed.ts",
-    "vercel-build": "echo 'Build complete'"
+    "seed": "tsx src/seed.ts"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
