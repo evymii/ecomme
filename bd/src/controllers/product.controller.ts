@@ -4,7 +4,15 @@ import Category from '../models/Category.model.js';
 
 export const getAllProducts = async (req: Request, res: Response): Promise<void> => {
   try {
-    const products = await Product.find().sort({ createdAt: -1 });
+    // Optimize: use lean() for faster queries and select only needed fields
+    const products = await Product.find()
+      .select('name price images features stock category createdAt code')
+      .sort({ createdAt: -1 })
+      .limit(100) // Limit results for better performance
+      .lean();
+    
+    // Set cache headers
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120');
     res.json({ success: true, products });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -13,11 +21,15 @@ export const getAllProducts = async (req: Request, res: Response): Promise<void>
 
 export const getProductById = async (req: Request, res: Response): Promise<void> => {
   try {
-    const product = await Product.findById(req.params.id);
+    // Use lean() for faster query
+    const product = await Product.findById(req.params.id).lean();
     if (!product) {
       res.status(404).json({ success: false, message: 'Бараа олдсонгүй' });
       return;
     }
+    
+    // Set cache headers
+    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=600');
     res.json({ success: true, product });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -40,7 +52,7 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
     if (isValidObjectId) {
       // Try to find category by ID first
       try {
-        const categoryDoc = await Category.findById(decodedCategory);
+        const categoryDoc = await Category.findById(decodedCategory).lean();
         if (categoryDoc) {
           categoryName = categoryDoc.name;
         } else {
@@ -56,7 +68,15 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
       categoryName = decodedCategory;
     }
     
-    const products = await Product.find({ category: categoryName }).sort({ createdAt: -1 });
+    // Optimize: use lean() and select only needed fields
+    const products = await Product.find({ category: categoryName })
+      .select('name price images features stock category createdAt code')
+      .sort({ createdAt: -1 })
+      .limit(100) // Limit results
+      .lean();
+    
+    // Set cache headers
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120');
     res.json({ success: true, products });
   } catch (error: any) {
     console.error('Error fetching products by category:', error);
@@ -66,12 +86,20 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
 
 export const getFeaturedProducts = async (req: Request, res: Response): Promise<void> => {
   try {
+    // Optimize: use lean() and select only needed fields
     const products = await Product.find({
       $or: [
         { 'features.isNew': true },
         { 'features.isFeatured': true }
       ]
-    }).sort({ createdAt: -1 }).limit(10);
+    })
+      .select('name price images features stock category createdAt code')
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+    
+    // Set cache headers
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120');
     res.json({ success: true, products });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -80,9 +108,15 @@ export const getFeaturedProducts = async (req: Request, res: Response): Promise<
 
 export const getDiscountedProducts = async (req: Request, res: Response): Promise<void> => {
   try {
+    // Optimize: use lean() and select only needed fields
     const products = await Product.find({ 'features.isDiscounted': true })
+      .select('name price images features stock category createdAt code')
       .sort({ createdAt: -1 })
-      .limit(10);
+      .limit(10)
+      .lean();
+    
+    // Set cache headers
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120');
     res.json({ success: true, products });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

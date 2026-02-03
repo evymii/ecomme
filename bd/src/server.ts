@@ -52,9 +52,45 @@ app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve uploaded files (only in development/local)
+// Serve uploaded files with proper CORS headers (only in development/local)
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-  app.use('/uploads', express.static('uploads'));
+  // Custom middleware for static files with CORS
+  app.use('/uploads', (req, res, next) => {
+    // Set CORS headers
+    const origin = req.headers.origin;
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      'http://localhost:3000',
+      'http://localhost:3001'
+    ].filter(Boolean);
+    
+    if (!origin || allowedOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    
+    // Cache headers for better performance
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    
+    next();
+  }, express.static('uploads', {
+    setHeaders: (res, path) => {
+      // Set proper content type
+      const ext = path.split('.').pop()?.toLowerCase();
+      const contentTypes: { [key: string]: string } = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp'
+      };
+      if (ext && contentTypes[ext]) {
+        res.setHeader('Content-Type', contentTypes[ext]);
+      }
+    }
+  }));
 }
 
 // Routes

@@ -48,7 +48,14 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<vo
 
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {
-    const users = await User.find().select('-password').sort({ createdAt: -1 });
+    // Optimize: use lean() for faster queries
+    const users = await User.find()
+      .select('-password')
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    // Set cache headers
+    res.setHeader('Cache-Control', 'private, max-age=30');
     res.json({ success: true, users });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -86,7 +93,13 @@ export const updateUserRole = async (req: Request, res: Response): Promise<void>
 
 export const getAllProducts = async (req: Request, res: Response): Promise<void> => {
   try {
-    const products = await Product.find().sort({ createdAt: -1 });
+    // Optimize: use lean() for faster queries
+    const products = await Product.find()
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    // Set cache headers
+    res.setHeader('Cache-Control', 'private, max-age=30');
     res.json({ success: true, products });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -393,13 +406,18 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
     if (startDate) console.log('📅 Start date:', query.createdAt.$gte);
     if (endDate) console.log('📅 End date:', query.createdAt.$lte);
 
+    // Optimize: use lean() and select only needed fields for faster queries
     const orders = await Order.find(query)
+      .select('orderCode items total status createdAt phoneNumber email customerName')
       .populate('user', 'name phoneNumber email')
-      .populate('items.product')
-      .sort({ createdAt: -1 });
+      .populate('items.product', 'name price images')
+      .sort({ createdAt: -1 })
+      .lean();
 
     console.log(`✅ Found ${orders.length} orders for admin`);
 
+    // Set cache headers
+    res.setHeader('Cache-Control', 'private, max-age=10');
     res.json({ success: true, orders });
   } catch (error: any) {
     console.error('❌ Error fetching orders for admin:', error);
