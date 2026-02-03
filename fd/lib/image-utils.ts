@@ -1,6 +1,6 @@
 /**
  * Convert relative image URL to absolute URL
- * Handles blob URLs (for previews) and server URLs (for saved images)
+ * Handles blob URLs (for previews), base64 data URLs, and server URLs (for saved images)
  */
 export function getImageUrl(url: string): string {
   if (!url) return '';
@@ -10,8 +10,13 @@ export function getImageUrl(url: string): string {
     return url;
   }
   
-  // If it's a blob URL (for previews), return as is - these work with regular img tags
+  // If it's a blob URL (for previews), return as is
   if (url.startsWith('blob:')) {
+    return url;
+  }
+  
+  // If it's a base64 data URL (for Vercel/serverless), return as is
+  if (url.startsWith('data:')) {
     return url;
   }
   
