@@ -39,7 +39,6 @@ export const connectDB = async (): Promise<void> => {
       minPoolSize: 0, // Allow connection to close when idle
       maxIdleTimeMS: 20000, // Close idle connections after 20s
       bufferCommands: false, // Disable mongoose buffering for faster errors
-      bufferMaxEntries: 0, // Disable mongoose buffering
     });
     
     console.log('✅ MongoDB connected successfully');
