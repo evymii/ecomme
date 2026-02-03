@@ -271,13 +271,13 @@ export default function ProductModal({
             </div>
 
             <div>
-              <Label htmlFor="category">Ангилал *</Label>
+              <Label>Ангилал *</Label>
               <Select
                 value={formData.category}
                 onValueChange={(value) => setFormData({ ...formData, category: value })}
                 required
               >
-                <SelectTrigger>
+                <SelectTrigger id="category">
                   <SelectValue placeholder="Ангилал сонгох" />
                 </SelectTrigger>
                 <SelectContent>
