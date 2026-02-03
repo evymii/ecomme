@@ -39,11 +39,12 @@ export default function AdminCategoriesPage() {
   };
 
   useEffect(() => {
+    // Only fetch once when admin is confirmed
     if (isAdmin && !isChecking) {
       fetchCategories();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, isChecking]);
+  }, [isAdmin]); // Only depend on isAdmin, not isChecking
 
   const handleEdit = (category: Category) => {
     setEditingCategory(category);

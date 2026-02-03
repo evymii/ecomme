@@ -44,25 +44,22 @@ export default function HomePage() {
       try {
         setLoading(true);
         
-        // Fetch all product types
-        const [allProductsRes, featuredRes, discountedRes] = await Promise.all([
-          api.get('/products'),
+        // Optimize: Only fetch featured and discounted, derive new from featured
+        // This reduces API calls from 3 to 2
+        const [featuredRes, discountedRes] = await Promise.all([
           api.get('/products/featured').catch(() => ({ data: { products: [] } })),
           api.get('/products/discounted').catch(() => ({ data: { products: [] } }))
         ]);
 
-        const allProducts = allProductsRes.data.products || [];
+        const featured = featuredRes.data.products || [];
+        const discounted = discountedRes.data.products || [];
         
-        // Get featured products
-        const featured = featuredRes.data.products || allProducts.filter((p: Product) => p.features?.isFeatured);
-        setFeaturedProducts(featured);
-        
-        // Get discounted products
-        const discounted = discountedRes.data.products || allProducts.filter((p: Product) => p.features?.isDiscounted);
-        setDiscountedProducts(discounted);
-        
-        // Get new products
+        // Combine and filter for new products
+        const allProducts = [...featured, ...discounted];
         const newProds = allProducts.filter((p: Product) => p.features?.isNew);
+        
+        setFeaturedProducts(featured);
+        setDiscountedProducts(discounted);
         setNewProducts(newProds);
       } catch (error) {
         console.error('Error fetching products:', error);

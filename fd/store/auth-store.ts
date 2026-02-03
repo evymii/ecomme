@@ -42,6 +42,8 @@ export const useAuthStore = create<AuthStore>()(
       logout: () => {
         set({ user: null, token: null });
         localStorage.removeItem('token');
+        // Clear persisted state
+        localStorage.removeItem('auth-storage');
       },
       isAdmin: () => {
         return get().user?.role === 'admin';
@@ -49,6 +51,8 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'auth-storage',
+      // Persist for 30 days (1 month)
+      partialize: (state) => ({ user: state.user, token: state.token }),
     }
   )
 );

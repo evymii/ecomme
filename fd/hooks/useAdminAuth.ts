@@ -15,11 +15,11 @@ export function useAdminAuth() {
   const hasRedirectedRef = useRef(false); // Prevent multiple redirects
 
   useEffect(() => {
-    // Prevent multiple simultaneous checks
+    // Prevent multiple checks - check only once per component mount
     if (hasCheckedRef.current) return;
     
     let isMounted = true;
-    hasCheckedRef.current = true;
+    hasCheckedRef.current = true; // Mark as checked - never reset
 
     const checkAuth = async () => {
       try {
@@ -30,7 +30,6 @@ export function useAdminAuth() {
           if (isMounted) {
             setIsAdmin(true);
             setIsChecking(false);
-            hasCheckedRef.current = false; // Reset after successful check
           }
           return;
         }
@@ -41,7 +40,6 @@ export function useAdminAuth() {
           if (isMounted && !hasRedirectedRef.current) {
             setIsChecking(false);
             setIsAdmin(false);
-            hasCheckedRef.current = false;
             hasRedirectedRef.current = true;
             router.push('/');
           }
@@ -66,13 +64,11 @@ export function useAdminAuth() {
             if (isMounted) {
               setIsAdmin(true);
               setIsChecking(false);
-              hasCheckedRef.current = false;
             }
           } else {
             if (isMounted && !hasRedirectedRef.current) {
               setIsChecking(false);
               setIsAdmin(false);
-              hasCheckedRef.current = false;
               hasRedirectedRef.current = true;
               router.push('/');
             }
@@ -84,12 +80,11 @@ export function useAdminAuth() {
             if (isMounted && !hasRedirectedRef.current) {
               setIsChecking(false);
               setIsAdmin(false);
-              hasCheckedRef.current = false;
               hasRedirectedRef.current = true;
               router.push('/');
             }
           } else {
-            // Network error - try fallback to profile endpoint
+            // Network error - try fallback to profile endpoint (only once)
             try {
               const profileResponse = await api.get('/users/profile');
               if (profileResponse.data.success && profileResponse.data.user?.role === 'admin') {
@@ -97,13 +92,11 @@ export function useAdminAuth() {
                 if (isMounted) {
                   setIsAdmin(true);
                   setIsChecking(false);
-                  hasCheckedRef.current = false;
                 }
               } else {
                 if (isMounted && !hasRedirectedRef.current) {
                   setIsChecking(false);
                   setIsAdmin(false);
-                  hasCheckedRef.current = false;
                   hasRedirectedRef.current = true;
                   router.push('/');
                 }
@@ -112,7 +105,6 @@ export function useAdminAuth() {
               if (isMounted && !hasRedirectedRef.current) {
                 setIsChecking(false);
                 setIsAdmin(false);
-                hasCheckedRef.current = false;
                 hasRedirectedRef.current = true;
                 router.push('/');
               }
@@ -124,32 +116,18 @@ export function useAdminAuth() {
         if (isMounted && !hasRedirectedRef.current) {
           setIsChecking(false);
           setIsAdmin(false);
-          hasCheckedRef.current = false;
           hasRedirectedRef.current = true;
           router.push('/');
         }
       }
     };
 
-    // Clear any existing timeout
-    if (checkTimeoutRef.current) {
-      clearTimeout(checkTimeoutRef.current);
-    }
-
     checkAuth();
-
-    // Reset check flag after a delay to allow re-check if needed (e.g., after login)
-    checkTimeoutRef.current = setTimeout(() => {
-      hasCheckedRef.current = false;
-    }, 2000);
 
     return () => {
       isMounted = false;
-      if (checkTimeoutRef.current) {
-        clearTimeout(checkTimeoutRef.current);
-      }
     };
-  }, []); // Empty dependency array - only run once on mount
+  }, []); // Empty dependency array - only run once on mount, never re-check
 
   return { isAdmin, isChecking };
 }

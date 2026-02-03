@@ -111,11 +111,12 @@ export default function AdminOrdersPage() {
   };
 
   useEffect(() => {
+    // Only fetch when admin is confirmed (not checking) and date filters change
     if (isAdmin && !isChecking) {
       fetchOrders();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, isChecking, startDate, endDate]);
+  }, [isAdmin, startDate, endDate]); // Remove isChecking from dependencies
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {

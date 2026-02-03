@@ -63,6 +63,7 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
             className="object-cover"
             unoptimized
             priority={priority}
+            loading={priority ? 'eager' : 'lazy'}
             sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
           />
         ) : (

@@ -37,11 +37,12 @@ export default function AdminUsersPage() {
   };
 
   useEffect(() => {
+    // Only fetch once when admin is confirmed
     if (isAdmin && !isChecking) {
       fetchUsers();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, isChecking]);
+  }, [isAdmin]); // Only depend on isAdmin, not isChecking
 
   const handleRoleChange = async (userId: string, newRole: 'admin' | 'user') => {
     try {

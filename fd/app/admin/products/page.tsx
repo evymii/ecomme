@@ -61,11 +61,12 @@ export default function AdminProductsPage() {
   };
 
   useEffect(() => {
+    // Only fetch once when admin is confirmed and not checking
     if (isAdmin && !isChecking) {
       fetchProducts();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, isChecking]);
+  }, [isAdmin]); // Only depend on isAdmin, not isChecking
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
