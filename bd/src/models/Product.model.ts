@@ -94,5 +94,10 @@ ProductSchema.index({ category: 1 });
 ProductSchema.index({ 'features.isFeatured': 1 });
 ProductSchema.index({ 'features.isNew': 1 });
 ProductSchema.index({ 'features.isDiscounted': 1 });
+// Compound index for common queries (featured + createdAt)
+ProductSchema.index({ 'features.isFeatured': 1, createdAt: -1 });
+ProductSchema.index({ 'features.isDiscounted': 1, createdAt: -1 });
+ProductSchema.index({ 'features.isNew': 1, createdAt: -1 });
+ProductSchema.index({ category: 1, createdAt: -1 });
 
 export default mongoose.model<IProduct>('Product', ProductSchema);

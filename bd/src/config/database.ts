@@ -32,12 +32,14 @@ export const connectDB = async (): Promise<void> => {
     }
 
     cachedConnection = await mongoose.connect(mongoURI, {
-      serverSelectionTimeoutMS: 4000, // 4 seconds - must be fast for serverless
-      socketTimeoutMS: 20000, // 20 seconds for socket operations
-      connectTimeoutMS: 4000, // 4 seconds connection timeout
+      serverSelectionTimeoutMS: 3000, // 3 seconds - faster for serverless
+      socketTimeoutMS: 15000, // 15 seconds for socket operations
+      connectTimeoutMS: 3000, // 3 seconds connection timeout
       maxPoolSize: 1, // Single connection for serverless
       minPoolSize: 0, // Allow connection to close when idle
-      maxIdleTimeMS: 30000, // Close idle connections after 30s
+      maxIdleTimeMS: 20000, // Close idle connections after 20s
+      bufferCommands: false, // Disable mongoose buffering for faster errors
+      bufferMaxEntries: 0, // Disable mongoose buffering
     });
     
     console.log('✅ MongoDB connected successfully');

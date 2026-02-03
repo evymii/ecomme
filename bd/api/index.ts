@@ -147,12 +147,12 @@ export default async function handler(req: express.Request, res: express.Respons
     const isHealthCheck = req.url === '/api/health' || req.url?.startsWith('/api/health');
     
     if (!isHealthCheck) {
-      // Connect to database with strict timeout (5 seconds max)
+      // Connect to database with strict timeout (3 seconds max for faster response)
       try {
         await Promise.race([
           connectToDatabase(),
           new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('Database connection timeout after 5 seconds')), 5000)
+            setTimeout(() => reject(new Error('Database connection timeout after 3 seconds')), 3000)
           )
         ]);
       } catch (dbError: any) {

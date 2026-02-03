@@ -93,8 +93,9 @@ const OrderSchema = new Schema<IOrder>(
 
 // Indexes for faster queries
 // Note: orderCode already has unique: true in field definition, so no need to index it again
-OrderSchema.index({ user: 1 });
-OrderSchema.index({ status: 1 });
-OrderSchema.index({ createdAt: -1 });
+OrderSchema.index({ createdAt: -1 }); // For sorting by date
+OrderSchema.index({ user: 1, createdAt: -1 }); // For user's orders
+OrderSchema.index({ status: 1, createdAt: -1 }); // For filtering by status
+OrderSchema.index({ orderCode: 1 }); // For finding by order code
 
 export default mongoose.model<IOrder>('Order', OrderSchema);

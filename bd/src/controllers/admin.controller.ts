@@ -407,11 +407,13 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
     if (endDate) console.log('📅 End date:', query.createdAt.$lte);
 
     // Optimize: use lean() and select only needed fields for faster queries
+    // Use select() on populate to reduce data transfer
     const orders = await Order.find(query)
-      .select('orderCode items total status createdAt phoneNumber email customerName')
+      .select('orderCode items total status createdAt phoneNumber email customerName user')
       .populate('user', 'name phoneNumber email')
       .populate('items.product', 'name price images')
       .sort({ createdAt: -1 })
+      .limit(500) // Limit orders to prevent huge responses
       .lean();
 
     console.log(`✅ Found ${orders.length} orders for admin`);
