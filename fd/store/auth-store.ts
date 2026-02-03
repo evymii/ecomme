@@ -35,6 +35,22 @@ export const useAuthStore = create<AuthStore>()(
         set({ token });
         if (token) {
           localStorage.setItem('token', token);
+          // Ensure token persists
+          try {
+            const currentState = get();
+            if (currentState.user) {
+              // Re-persist the state with token
+              localStorage.setItem('auth-storage', JSON.stringify({
+                state: {
+                  user: currentState.user,
+                  token: token
+                },
+                version: 0
+              }));
+            }
+          } catch (e) {
+            console.error('Error persisting auth state:', e);
+          }
         } else {
           localStorage.removeItem('token');
         }

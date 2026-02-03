@@ -23,10 +23,21 @@ export function useAdminAuth() {
 
     const checkAuth = async () => {
       try {
-        // Quick check: if user is already in store and is admin
-        // This check happens synchronously, so it's fast
-        const currentUser = useAuthStore.getState().user;
-        if (currentUser?.role === 'admin') {
+        // First, check persisted state from Zustand
+        const storeState = useAuthStore.getState();
+        const currentUser = storeState.user;
+        const storeToken = storeState.token;
+        
+        // Also check localStorage as backup
+        const localStorageToken = localStorage.getItem('token');
+        const token = storeToken || localStorageToken;
+        
+        // If we have user in store and token, and user is admin, we're good
+        if (currentUser?.role === 'admin' && token) {
+          // Ensure token is in both places
+          if (!storeToken && localStorageToken) {
+            useAuthStore.getState().setToken(localStorageToken);
+          }
           if (isMounted) {
             setIsAdmin(true);
             setIsChecking(false);
@@ -34,8 +45,7 @@ export function useAdminAuth() {
           return;
         }
 
-        // Check if token exists
-        const token = localStorage.getItem('token');
+        // If no token at all, redirect
         if (!token) {
           if (isMounted && !hasRedirectedRef.current) {
             setIsChecking(false);
@@ -45,19 +55,24 @@ export function useAdminAuth() {
           }
           return;
         }
+        
+        // Ensure token is in store
+        if (!storeToken && token) {
+          useAuthStore.getState().setToken(token);
+        }
 
         // Use dedicated admin check endpoint (faster and lighter)
         try {
           const response = await api.get('/admin/check');
           if (response.data.success && response.data.isAdmin) {
-            // Update user in store if needed
-            if (response.data.user && !user) {
+            // Always update user in store to ensure it's fresh
+            if (response.data.user) {
               useAuthStore.getState().setUser({
                 id: response.data.user.id,
                 role: response.data.user.role,
-                phoneNumber: '',
-                email: '',
-                name: ''
+                phoneNumber: response.data.user.phoneNumber || '',
+                email: response.data.user.email || '',
+                name: response.data.user.name || ''
               });
             }
             
@@ -66,6 +81,7 @@ export function useAdminAuth() {
               setIsChecking(false);
             }
           } else {
+            // Not admin - redirect
             if (isMounted && !hasRedirectedRef.current) {
               setIsChecking(false);
               setIsAdmin(false);
@@ -75,25 +91,41 @@ export function useAdminAuth() {
           }
         } catch (error: any) {
           console.error('Admin auth check failed:', error);
-          // If 401/403, user is not admin or not authenticated
+          
+          // If 401/403, token is invalid or expired
           if (error.response?.status === 401 || error.response?.status === 403) {
+            // Clear invalid token
+            useAuthStore.getState().logout();
             if (isMounted && !hasRedirectedRef.current) {
               setIsChecking(false);
               setIsAdmin(false);
               hasRedirectedRef.current = true;
               router.push('/');
             }
+          } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+            // Network timeout - don't clear token, just show error
+            console.error('Network timeout - keeping auth state');
+            if (isMounted) {
+              setIsChecking(false);
+              setIsAdmin(false);
+              // Don't redirect on timeout - let user retry
+            }
           } else {
-            // Network error - try fallback to profile endpoint (only once)
+            // Other network error - try fallback to profile endpoint
             try {
               const profileResponse = await api.get('/users/profile');
               if (profileResponse.data.success && profileResponse.data.user?.role === 'admin') {
-                useAuthStore.getState().setUser(profileResponse.data.user);
+                // Update store with full user data
+                useAuthStore.getState().setUser({
+                  ...profileResponse.data.user,
+                  id: profileResponse.data.user.id || profileResponse.data.user._id
+                });
                 if (isMounted) {
                   setIsAdmin(true);
                   setIsChecking(false);
                 }
               } else {
+                // Not admin
                 if (isMounted && !hasRedirectedRef.current) {
                   setIsChecking(false);
                   setIsAdmin(false);
@@ -101,7 +133,11 @@ export function useAdminAuth() {
                   router.push('/');
                 }
               }
-            } catch (fallbackError) {
+            } catch (fallbackError: any) {
+              // If fallback also fails with 401, clear auth
+              if (fallbackError.response?.status === 401) {
+                useAuthStore.getState().logout();
+              }
               if (isMounted && !hasRedirectedRef.current) {
                 setIsChecking(false);
                 setIsAdmin(false);

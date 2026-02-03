@@ -44,13 +44,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Unauthorized - clear auth
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        window.location.href = '/';
-      }
-    }
+    // Don't automatically clear tokens on 401 errors
+    // Let individual components/hooks handle auth errors
+    // This prevents clearing tokens on temporary network issues or admin pages
+    // The useAdminAuth hook and AuthProvider will handle token clearing appropriately
     return Promise.reject(error);
   }
 );
