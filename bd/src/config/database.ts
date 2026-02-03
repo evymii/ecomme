@@ -32,9 +32,12 @@ export const connectDB = async (): Promise<void> => {
     }
 
     cachedConnection = await mongoose.connect(mongoURI, {
-      serverSelectionTimeoutMS: 5000, // Reduced from 10000 to 5000ms
-      socketTimeoutMS: 30000, // Reduced from 45000 to 30000ms
-      connectTimeoutMS: 5000, // Add connection timeout
+      serverSelectionTimeoutMS: 4000, // 4 seconds - must be fast for serverless
+      socketTimeoutMS: 20000, // 20 seconds for socket operations
+      connectTimeoutMS: 4000, // 4 seconds connection timeout
+      maxPoolSize: 1, // Single connection for serverless
+      minPoolSize: 0, // Allow connection to close when idle
+      maxIdleTimeMS: 30000, // Close idle connections after 30s
     });
     
     console.log('✅ MongoDB connected successfully');

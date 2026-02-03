@@ -85,64 +85,120 @@ async function connectToDatabase() {
 
 // Export serverless function for Vercel
 export default async function handler(req: express.Request, res: express.Response) {
-  // Set timeout to prevent hanging
-  const timeout = setTimeout(() => {
+  // CRITICAL: Set response timeout to 9 seconds (Vercel Hobby plan = 10s max)
+  const responseTimeout = setTimeout(() => {
     if (!res.headersSent) {
-      res.status(504).json({
-        success: false,
-        message: 'Request timeout'
-      });
+      try {
+        res.status(504).json({
+          success: false,
+          message: 'Request timeout - function execution exceeded time limit'
+        });
+      } catch (e) {
+        // Response already sent or closed
+        console.error('Failed to send timeout response:', e);
+      }
     }
-  }, 25000); // 25 seconds timeout (before 30s maxDuration)
+  }, 9000); // 9 seconds (1 second buffer before 10s limit)
+
+  // Helper to clear timeout and ensure response
+  const cleanup = () => {
+    clearTimeout(responseTimeout);
+  };
 
   try {
     // Skip database connection for health check
     const isHealthCheck = req.url === '/api/health' || req.url?.startsWith('/api/health');
     
     if (!isHealthCheck) {
-      // Connect to database on each request (connection is cached)
+      // Connect to database with strict timeout (5 seconds max)
       try {
         await Promise.race([
           connectToDatabase(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Database connection timeout')), 8000)
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Database connection timeout after 5 seconds')), 5000)
           )
         ]);
       } catch (dbError: any) {
-        clearTimeout(timeout);
-        console.error('Database connection failed:', dbError);
+        cleanup();
+        console.error('Database connection failed:', dbError.message);
         if (!res.headersSent) {
           res.status(503).json({
             success: false,
             message: 'Database connection failed',
             error: process.env.NODE_ENV === 'development' ? dbError.message : undefined
           });
-          return;
         }
+        return; // CRITICAL: Return immediately to prevent further execution
       }
     }
     
-    // Handle the request
-    return new Promise((resolve, reject) => {
-      app(req, res, (err: any) => {
-        clearTimeout(timeout);
-        if (err) {
-          reject(err);
-        } else {
-          resolve(res);
+    // Handle the request with Express
+    // Wrap in Promise to ensure it resolves/rejects properly
+    return new Promise<void>((resolve, reject) => {
+      // Set up response handlers
+      let resolved = false;
+      
+      const finish = () => {
+        if (!resolved) {
+          resolved = true;
+          cleanup();
+          resolve();
         }
+      };
+
+      const errorHandler = (err: any) => {
+        if (!resolved) {
+          resolved = true;
+          cleanup();
+          if (!res.headersSent) {
+            try {
+              res.status(500).json({
+                success: false,
+                message: 'Internal server error',
+                error: process.env.NODE_ENV === 'development' ? err?.message : undefined
+              });
+            } catch (e) {
+              console.error('Failed to send error response:', e);
+            }
+          }
+          resolve(); // Resolve instead of reject to prevent unhandled promise
+        }
+      };
+
+      // Handle Express response completion
+      res.on('finish', finish);
+      res.on('close', finish);
+      res.on('error', errorHandler);
+
+      // Process request with Express
+      app(req, res, (err: any) => {
+        if (err) {
+          errorHandler(err);
+        }
+        // Note: Express will handle the response, we just wait for it
       });
+
+      // Safety: If response takes too long, force finish
+      setTimeout(() => {
+        if (!resolved && !res.headersSent) {
+          errorHandler(new Error('Response timeout'));
+        }
+      }, 8500); // 8.5 seconds safety net
     });
   } catch (error: any) {
-    clearTimeout(timeout);
+    cleanup();
     console.error('Serverless function error:', error);
     if (!res.headersSent) {
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
+      try {
+        res.status(500).json({
+          success: false,
+          message: 'Internal server error',
+          error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      } catch (e) {
+        console.error('Failed to send error response:', e);
+      }
     }
-    return Promise.resolve(res);
+    return Promise.resolve();
   }
 }
