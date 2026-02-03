@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 import { 
+  checkAdminAuth,
   getDashboardStats, 
   getAllUsers, 
   updateUserRole, 
@@ -18,6 +19,9 @@ const router = express.Router();
 
 router.use(authenticate);
 router.use(requireAdmin);
+
+// Admin check endpoint (lightweight, fast)
+router.get('/check', checkAdminAuth);
 
 // Dashboard
 router.get('/dashboard', getDashboardStats);

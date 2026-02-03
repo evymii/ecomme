@@ -1,8 +1,27 @@
 import { Request, Response } from 'express';
+import { AuthRequest } from '../middleware/auth.js';
 import User from '../models/User.model.js';
 import Product from '../models/Product.model.js';
 import Order from '../models/Order.model.js';
 import { bufferToDataURL, generateFileName, saveFileLocally } from '../utils/fileUtils.js';
+
+// Simple admin check endpoint - fast and lightweight
+export const checkAdminAuth = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    // This endpoint is protected by authenticate + requireAdmin middleware
+    // If we reach here, user is authenticated and is admin
+    res.json({
+      success: true,
+      isAdmin: true,
+      user: {
+        id: req.userId,
+        role: req.userRole
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 export const getDashboardStats = async (req: Request, res: Response): Promise<void> => {
   try {
