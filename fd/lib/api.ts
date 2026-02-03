@@ -18,7 +18,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
 const api = axios.create({
   baseURL: normalizedApiUrl,
   withCredentials: true,
-  timeout: 10000, // 10 second timeout
+  timeout: 5000, // 5 second timeout for faster responses
 });
 
 // Add auth token to requests and handle Content-Type
