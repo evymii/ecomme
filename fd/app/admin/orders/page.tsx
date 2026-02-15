@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import AdminNav from '@/components/admin/AdminNav';
+import { getImageUrl } from '@/lib/image-utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -24,7 +26,7 @@ interface Order {
   email?: string; // For guest orders
   customerName?: string; // For guest orders
   items: Array<{
-    product: { name: string; price?: number; code?: string };
+    product: { name: string; price?: number; code?: string; images?: Array<{ url: string; isMain: boolean }> };
     quantity: number;
     price: number;
     size?: string;
@@ -405,24 +407,46 @@ export default function AdminOrdersPage() {
                 <div className="border-t pt-4">
                   <h3 className="font-semibold mb-3">Захиалгын бараанууд</h3>
                   <div className="space-y-3">
-                    {selectedOrder.items.map((item, idx) => (
-                      <div key={idx} className="flex justify-between items-start pb-3 border-b last:border-0">
-                        <div className="flex-1">
-                          <p className="font-medium">{item.product.name}</p>
-                          {item.product.code && (
-                            <p className="text-xs text-gray-500">Код: {item.product.code}</p>
-                          )}
-                          <p className="text-sm text-gray-600">
-                            Тоо ширхэг: {item.quantity}
-                            {item.size && ` • Хэмжээ: ${item.size}`}
-                          </p>
+                    {selectedOrder.items.map((item, idx) => {
+                      const mainImg = item.product.images?.find(img => img.isMain) || item.product.images?.[0];
+                      return (
+                        <div key={idx} className="flex items-center gap-3 pb-3 border-b last:border-0">
+                          {/* Product Image */}
+                          <div className="relative w-12 h-12 flex-shrink-0 bg-gray-100 rounded-lg overflow-hidden">
+                            {mainImg ? (
+                              <Image
+                                src={getImageUrl(mainImg.url)}
+                                alt={item.product.name}
+                                fill
+                                className="object-cover"
+                                unoptimized
+                                sizes="48px"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-300 text-[8px]">
+                                No img
+                              </div>
+                            )}
+                          </div>
+                          {/* Product Info */}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{item.product.name}</p>
+                            {item.product.code && (
+                              <p className="text-xs text-gray-500">Код: {item.product.code}</p>
+                            )}
+                            <p className="text-xs text-gray-600">
+                              Тоо ширхэг: {item.quantity}
+                              {item.size && ` • Хэмжээ: ${item.size}`}
+                            </p>
+                          </div>
+                          {/* Price */}
+                          <div className="text-right flex-shrink-0">
+                            <p className="font-semibold text-sm">₮{(item.price * item.quantity).toLocaleString()}</p>
+                            <p className="text-xs text-gray-500">₮{item.price.toLocaleString()} × {item.quantity}</p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-semibold">₮{(item.price * item.quantity).toLocaleString()}</p>
-                          <p className="text-xs text-gray-500">₮{item.price.toLocaleString()} × {item.quantity}</p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 

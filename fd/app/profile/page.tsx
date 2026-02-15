@@ -39,19 +39,20 @@ export default function ProfilePage() {
   const router = useRouter();
   const { toast } = useToast();
 
+  const userRole = user?.role;
+  const userId = user ? 'exists' : null;
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       router.push('/');
       return;
     }
-    // Redirect admin users to admin pages
-    if (user.role === 'admin') {
+    if (userRole === 'admin') {
       router.push('/admin/orders');
       return;
     }
     fetchProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, router]);
+  }, [userId, userRole, router]);
 
   const fetchProfile = async () => {
     try {
@@ -142,7 +143,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-[#FCFCFC] flex flex-col">
       <Header />
       <div className="container mx-auto px-3 md:px-4 py-4 md:py-8">
         <div className="flex flex-col md:flex-row gap-4 md:gap-6">

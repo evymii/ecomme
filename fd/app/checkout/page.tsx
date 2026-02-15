@@ -40,6 +40,7 @@ export default function CheckoutPage() {
     setMounted(true);
   }, []);
 
+  const itemCount = items.length;
   useEffect(() => {
     // Don't redirect if order was successful - let success page show
     if (orderSuccess) {
@@ -47,10 +48,10 @@ export default function CheckoutPage() {
     }
     
     // Only redirect if cart is empty AND not loading
-    if (items.length === 0 && !loading) {
+    if (itemCount === 0 && !loading) {
       router.push('/');
     }
-  }, [items, orderSuccess, router, loading]);
+  }, [itemCount, orderSuccess, router, loading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,7 +105,10 @@ export default function CheckoutPage() {
 
       console.log('Submitting order:', orderData);
 
-      const response = await api.post('/orders', orderData);
+      // Use longer timeout for order creation (15 seconds)
+      const response = await api.post('/orders', orderData, {
+        timeout: 15000, // 15 seconds for order creation with transactions
+      });
 
       console.log('Order response:', response.data);
 
@@ -140,11 +144,25 @@ export default function CheckoutPage() {
       }
     } catch (error: any) {
       console.error('Order creation error:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Захиалга үүсгэхэд алдаа гарлаа';
+      
+      // Handle timeout errors specifically
+      let errorMessage = 'Захиалга үүсгэхэд алдаа гарлаа';
+      
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = 'Холболт удаан байна. Дахин оролдоно уу.';
+      } else if (error.response?.status === 504) {
+        errorMessage = 'Сервертэй холбогдоход хэт удаан байна. Дахин оролдоно уу.';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: 'Алдаа',
         description: errorMessage,
         variant: 'destructive',
+        duration: 5000,
       });
     } finally {
       setLoading(false);

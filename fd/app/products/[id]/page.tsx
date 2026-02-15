@@ -3,11 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { ArrowLeft, ShoppingCart, Truck } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Truck, Shield } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import ProductCard from '@/components/products/ProductCard';
-import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import { getImageUrl } from '@/lib/image-utils';
 import { useCartStore } from '@/store/cart-store';
@@ -50,11 +49,12 @@ export default function ProductDetailPage() {
   const user = useAuthStore((state) => state.user);
 
   // Redirect admin users
+  const userRole = user?.role;
   useEffect(() => {
-    if (user?.role === 'admin') {
+    if (userRole === 'admin') {
       router.push('/admin/orders');
     }
-  }, [user, router]);
+  }, [userRole, router]);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -64,7 +64,7 @@ export default function ProductDetailPage() {
         if (response.data.success && response.data.product) {
           const productData = response.data.product;
           // Sort images: main first, then by order
-          const sortedImages = [...(productData.images || [])].sort((a, b) => {
+          const sortedImages = [...(productData.images || [])].sort((a: ProductImage, b: ProductImage) => {
             if (a.isMain) return -1;
             if (b.isMain) return 1;
             return (a.order || 0) - (b.order || 0);
@@ -76,21 +76,38 @@ export default function ProductDetailPage() {
             setSelectedSize(productData.sizes[0]);
           }
           
-          // Fetch similar products from same category
-          if (productData.category) {
-            try {
-              // Encode the category name for URL
+          // Fetch similar products from same category, fallback to all products
+          try {
+            let similar: Product[] = [];
+
+            // First try: same category
+            if (productData.category) {
               const encodedCategory = encodeURIComponent(productData.category);
               const similarResponse = await api.get(`/products/category/${encodedCategory}`);
-              const similar = (similarResponse.data.products || []).filter(
+              similar = (similarResponse.data.products || []).filter(
                 (p: Product) => p._id !== productId
-              ).slice(0, 8);
-              setSimilarProducts(similar);
-            } catch (error) {
-              // Silently fail - similar products are optional
-              console.error('Error fetching similar products:', error);
-              setSimilarProducts([]);
+              );
             }
+
+            // Fallback: if not enough from same category, fetch all products
+            if (similar.length < 4) {
+              const allResponse = await api.get('/products');
+              const allOther = (allResponse.data.products || []).filter(
+                (p: Product) => p._id !== productId
+              );
+              // Merge: category products first, then fill with others (no duplicates)
+              const existingIds = new Set(similar.map((p: Product) => p._id));
+              for (const p of allOther) {
+                if (!existingIds.has(p._id)) {
+                  similar.push(p);
+                }
+              }
+            }
+
+            setSimilarProducts(similar.slice(0, 8));
+          } catch (error) {
+            console.error('Error fetching similar products:', error);
+            setSimilarProducts([]);
           }
         }
       } catch (error) {
@@ -119,10 +136,12 @@ export default function ProductDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-[#FCFCFC]">
         <Header />
-        <main className="container mx-auto px-4 py-4 md:py-8">
-          <div className="text-center py-12 text-sm md:text-base">Ачааллаж байна...</div>
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="text-center py-12">
+            <p className="text-[#5D737E] text-sm font-light">Ачааллаж байна...</p>
+          </div>
         </main>
       </div>
     );
@@ -130,14 +149,17 @@ export default function ProductDetailPage() {
 
   if (!product) {
     return (
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-[#FCFCFC]">
         <Header />
-        <main className="container mx-auto px-4 py-4 md:py-8">
-          <div className="text-center py-12">
-            <p className="text-gray-600 mb-4">Бараа олдсонгүй</p>
-            <Button onClick={() => router.push('/products')} variant="outline">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="text-center py-12 space-y-4">
+            <p className="text-[#3F4045] font-light">Бараа олдсонгүй</p>
+            <button 
+              onClick={() => router.push('/products')} 
+              className="px-6 py-2.5 border border-[#02111B]/20 text-[#02111B] rounded-full hover:bg-white transition-all font-light text-sm"
+            >
               Бараа руу буцах
-            </Button>
+            </button>
           </div>
         </main>
       </div>
@@ -148,129 +170,131 @@ export default function ProductDetailPage() {
   const isOutOfStock = product.stock === 0;
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen bg-[#FCFCFC] flex flex-col">
       <Header />
-      <main className="container mx-auto px-4 py-4 md:py-8 flex-1">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10 flex-1 w-full">
         {/* Back Button */}
-        <Button
-          variant="ghost"
+        <button
           onClick={() => router.back()}
-          className="mb-4 md:mb-6"
+          className="inline-flex items-center gap-2 text-[#5D737E] hover:text-[#02111B] transition-colors mb-6 md:mb-8 font-light text-sm"
         >
-          <ArrowLeft className="w-4 h-4 mr-2" />
+          <ArrowLeft className="w-4 h-4" />
           Буцах
-        </Button>
+        </button>
 
         {/* Product Details */}
-        <div className="bg-white rounded-lg overflow-hidden mb-6 md:mb-8">
-          <div className="grid grid-cols-12 gap-2 md:gap-4 lg:gap-8">
-            {/* Main Image */}
-            <div className={`${product.images.length > 1 ? 'col-span-10 md:col-span-7' : 'col-span-12 md:col-span-8'}`}>
-              <div className="relative aspect-square bg-gray-50 rounded-md md:rounded-lg overflow-hidden">
-                {currentImage ? (
-                  <Image
-                    src={getImageUrl(currentImage.url)}
-                    alt={product.name}
-                    fill
-                    className="object-cover"
-                    priority
-                    unoptimized
-                    sizes="(max-width: 768px) 80vw, (max-width: 1024px) 60vw, 50vw"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <span className="text-gray-400 text-xs md:text-sm">Зураг байхгүй</span>
+        <div className="mb-8 md:mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-10">
+            {/* Left: Image Area (thumbnails + main image) */}
+            <div className="flex gap-2 md:gap-3">
+              {/* Thumbnail Gallery - left side of main image */}
+              {product.images.length > 1 && (
+                <div className="w-14 md:w-20 flex-shrink-0">
+                  <div className="flex flex-col gap-1.5 md:gap-2.5 h-full overflow-y-auto scrollbar-hide">
+                    {product.images.map((image, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setSelectedImageIndex(index)}
+                        className={`relative w-full aspect-square rounded-lg md:rounded-xl overflow-hidden border-2 transition-all flex-shrink-0 ${
+                          index === selectedImageIndex
+                            ? 'border-[#02111B] shadow-md'
+                            : 'border-[#02111B]/10 hover:border-[#5D737E]/40'
+                        }`}
+                      >
+                        <Image
+                          src={getImageUrl(image.url)}
+                          alt={`${product.name} - ${index + 1}`}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                          sizes="80px"
+                        />
+                      </button>
+                    ))}
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Feature Badges */}
-                <div className="absolute top-2 left-2 md:top-3 md:left-3 flex flex-wrap gap-1 md:gap-2">
-                  {product.features.isNew && (
-                    <span className="bg-green-500 text-white text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 md:py-1 rounded">
-                      Шинэ
-                    </span>
+              {/* Main Image */}
+              <div className="flex-1 min-w-0">
+                <div className="relative aspect-square bg-gradient-to-br from-[#5D737E]/5 to-transparent rounded-2xl md:rounded-3xl overflow-hidden">
+                  {currentImage ? (
+                    <Image
+                      src={getImageUrl(currentImage.url)}
+                      alt={product.name}
+                      fill
+                      className="object-cover"
+                      priority
+                      unoptimized
+                      sizes="(max-width: 768px) 80vw, (max-width: 1024px) 45vw, 40vw"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-[#5D737E]/40 text-sm font-light">Зураг байхгүй</span>
+                    </div>
                   )}
-                  {product.features.isFeatured && (
-                    <span className="bg-blue-500 text-white text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 md:py-1 rounded">
-                      Онцлох
-                    </span>
-                  )}
-                  {product.features.isDiscounted && (
-                    <span className="bg-red-500 text-white text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 md:py-1 rounded">
-                      Хямдарсан
-                    </span>
-                  )}
+
+                  {/* Feature Badges */}
+                  <div className="absolute top-3 left-3 md:top-4 md:left-4 flex flex-wrap gap-1.5 md:gap-2">
+                    {product.features.isNew && (
+                      <span className="px-2.5 py-1 bg-[#02111B]/80 backdrop-blur-sm text-[#FCFCFC] rounded-full text-[10px] md:text-xs font-light tracking-wide">
+                        Шинэ
+                      </span>
+                    )}
+                    {product.features.isFeatured && (
+                      <span className="px-2.5 py-1 bg-[#5D737E]/80 backdrop-blur-sm text-[#FCFCFC] rounded-full text-[10px] md:text-xs font-light tracking-wide">
+                        Онцлох
+                      </span>
+                    )}
+                    {product.features.isDiscounted && (
+                      <span className="px-2.5 py-1 bg-[#30292F]/80 backdrop-blur-sm text-[#FCFCFC] rounded-full text-[10px] md:text-xs font-light tracking-wide">
+                        Хямдрал
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Right Sidebar - Thumbnail Gallery */}
-            {product.images.length > 1 && (
-              <div className="col-span-2 md:col-span-1">
-                <div className="flex flex-col gap-1.5 md:gap-2 h-full">
-                  {product.images.map((image, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setSelectedImageIndex(index)}
-                      className={`relative w-full aspect-square rounded-md md:rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${
-                        index === selectedImageIndex
-                          ? 'border-black'
-                          : 'border-gray-200 hover:border-gray-400'
-                      }`}
-                    >
-                      <Image
-                        src={getImageUrl(image.url)}
-                        alt={`${product.name} - Image ${index + 1}`}
-                        fill
-                        className="object-cover"
-                        unoptimized
-                        sizes="(max-width: 768px) 16vw, (max-width: 1024px) 64px, 80px"
-                      />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Product Information */}
-            <div className={`${product.images.length > 1 ? 'col-span-12 md:col-span-4' : 'col-span-12 md:col-span-4'} space-y-4 md:space-y-6`}>
-              {/* Product Title */}
+            {/* Right: Product Information */}
+            <div className="space-y-5 md:space-y-6">
+              {/* Title & Code */}
               <div>
-                <h1 className="text-xl md:text-2xl font-semibold mb-1">{product.name}</h1>
                 {product.code && (
-                  <p className="text-xs md:text-sm text-gray-500">Код: {product.code}</p>
+                  <p className="text-xs text-[#5D737E] font-mono mb-1.5 tracking-wide">{product.code}</p>
                 )}
+                <h1 className="text-xl md:text-2xl text-[#02111B] tracking-tight" style={{ fontWeight: 600 }}>
+                  {product.name}
+                </h1>
               </div>
 
               {/* Price */}
               <div>
-                <p className="text-2xl md:text-3xl font-bold text-black">
+                <p className="text-2xl md:text-3xl text-[#02111B] tracking-tight" style={{ fontWeight: 600 }}>
                   ₮{product.price.toLocaleString()}
                 </p>
               </div>
 
               {/* Description */}
               {product.description && (
-                <div>
-                  <p className="text-sm md:text-base text-gray-700 leading-relaxed whitespace-pre-line">
-                    {product.description}
-                  </p>
-                </div>
+                <p className="text-sm text-[#3F4045] leading-relaxed whitespace-pre-line font-light">
+                  {product.description}
+                </p>
               )}
 
               {/* Size Selection */}
               {product.sizes && product.sizes.length > 0 && (
                 <div className="space-y-3">
-                  <span className="text-sm md:text-base font-semibold block">Хэмжээ:</span>
+                  <span className="text-sm text-[#02111B] tracking-tight" style={{ fontWeight: 500 }}>Хэмжээ</span>
                   <div className="flex flex-wrap gap-2">
                     {product.sizes.map((size) => (
                       <button
                         key={size}
                         onClick={() => setSelectedSize(size)}
-                        className={`px-3 py-2 text-sm border rounded transition-colors min-w-[3rem] ${
+                        className={`px-4 py-2 text-sm rounded-full transition-all min-w-[3rem] font-light tracking-wide ${
                           selectedSize === size
-                            ? 'bg-black text-white border-black'
-                            : 'bg-white text-black border-gray-300 hover:border-black'
+                            ? 'bg-[#02111B] text-white'
+                            : 'bg-white text-[#3F4045] border border-[#02111B]/10 hover:border-[#5D737E]/30'
                         }`}
                       >
                         {size}
@@ -280,21 +304,21 @@ export default function ProductDetailPage() {
                 </div>
               )}
 
-              {/* Quantity Selector */}
+              {/* Quantity */}
               <div className="flex items-center gap-3">
-                <span className="text-sm md:text-base font-semibold">Тоо ширхэг:</span>
-                <div className="flex items-center gap-2 border border-gray-300 rounded">
+                <span className="text-sm text-[#02111B] tracking-tight" style={{ fontWeight: 500 }}>Тоо ширхэг</span>
+                <div className="flex items-center border border-[#02111B]/10 rounded-full overflow-hidden">
                   <button
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-sm md:text-base"
+                    className="w-9 h-9 flex items-center justify-center hover:bg-[#5D737E]/10 transition-colors text-sm text-[#3F4045]"
                     disabled={quantity <= 1}
                   >
                     -
                   </button>
-                  <span className="w-12 text-center font-medium text-sm md:text-base">{quantity}</span>
+                  <span className="w-10 text-center text-sm text-[#02111B]" style={{ fontWeight: 500 }}>{quantity}</span>
                   <button
                     onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                    className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-sm md:text-base"
+                    className="w-9 h-9 flex items-center justify-center hover:bg-[#5D737E]/10 transition-colors text-sm text-[#3F4045]"
                     disabled={quantity >= product.stock}
                   >
                     +
@@ -302,43 +326,50 @@ export default function ProductDetailPage() {
                 </div>
               </div>
 
-              {/* Delivery Information */}
-              <div className="flex items-center gap-2 text-sm md:text-base text-gray-600">
-                <Truck className="w-4 h-4 md:w-5 md:h-5" />
-                <span>Хүргэлттэй</span>
+              {/* Info Chips */}
+              <div className="flex flex-wrap gap-3">
+                <div className="flex items-center gap-2 text-sm text-[#5D737E] font-light">
+                  <div className="w-7 h-7 rounded-full bg-[#5D737E]/10 flex items-center justify-center">
+                    <Truck className="w-3.5 h-3.5 text-[#5D737E]" />
+                  </div>
+                  <span>Хүргэлттэй</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-[#5D737E] font-light">
+                  <div className="w-7 h-7 rounded-full bg-[#30292F]/10 flex items-center justify-center">
+                    <Shield className="w-3.5 h-3.5 text-[#30292F]" />
+                  </div>
+                  <span>Баталгаат</span>
+                </div>
               </div>
 
-              {/* Stock Information */}
-              <div className="text-sm md:text-base">
-                <span className="font-semibold">Нөөц: </span>
-                <span className={product.stock > 0 ? 'text-green-600' : 'text-red-600'}>
+              {/* Stock */}
+              <p className="text-sm font-light">
+                <span className="text-[#3F4045]">Нөөц: </span>
+                <span className={product.stock > 0 ? 'text-[#5D737E]' : 'text-red-500'} style={{ fontWeight: 500 }}>
                   {product.stock > 0 ? `${product.stock} ширхэг` : 'Дууссан'}
                 </span>
-              </div>
+              </p>
 
               {/* Action Buttons */}
               <div className="space-y-3 pt-2">
-                <Button
+                <button
                   onClick={handleAddToCart}
                   disabled={isOutOfStock}
-                  variant="outline"
-                  className="w-full text-sm md:text-base h-11 md:h-12 border-2 border-gray-300 hover:bg-gray-50"
-                  size="lg"
+                  className="w-full h-12 px-6 border border-[#02111B]/20 text-[#02111B] rounded-full hover:bg-white hover:border-[#5D737E]/30 transition-all duration-300 font-light text-sm flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <ShoppingCart className="w-4 h-4 md:w-5 md:h-5 mr-2" />
+                  <ShoppingCart className="w-4 h-4" />
                   {isOutOfStock ? 'Дууссан' : 'Сагслах'}
-                </Button>
-                <Button
+                </button>
+                <button
                   onClick={() => {
                     handleAddToCart();
                     router.push('/checkout');
                   }}
                   disabled={isOutOfStock}
-                  className="w-full text-sm md:text-base h-11 md:h-12 bg-black hover:bg-gray-800 text-white"
-                  size="lg"
+                  className="w-full h-12 px-6 bg-[#02111B] text-white rounded-full hover:bg-[#3F4045] transition-all duration-300 hover:shadow-xl font-light text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Захиалах
-                </Button>
+                </button>
               </div>
             </div>
           </div>
@@ -346,11 +377,11 @@ export default function ProductDetailPage() {
 
         {/* Similar Products Section */}
         {similarProducts.length > 0 && (
-          <div className="mt-8 md:mt-12">
-            <h2 className="text-xl md:text-3xl font-semibold md:font-bold mb-4 md:mb-6">
+          <div className="mt-10 md:mt-16 border-t border-[#02111B]/5 pt-10 md:pt-14">
+            <h2 className="text-xl md:text-2xl text-[#02111B] tracking-tight mb-6 md:mb-8" style={{ fontWeight: 600 }}>
               Төстэй бүтээгдэхүүн
             </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
               {similarProducts.map((similarProduct) => (
                 <ProductCard key={similarProduct._id} product={similarProduct} />
               ))}
@@ -358,6 +389,7 @@ export default function ProductDetailPage() {
           </div>
         )}
       </main>
+      <Footer />
     </div>
   );
 }

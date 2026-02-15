@@ -52,6 +52,12 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Custom design palette
+        ink: '#02111B',
+        gunmetal: '#3F4045',
+        'shadow-grey': '#30292F',
+        slate: '#5D737E',
+        'off-white': '#FCFCFC',
       },
       borderRadius: {
         lg: "var(--radius)",

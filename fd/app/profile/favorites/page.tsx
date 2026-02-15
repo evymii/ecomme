@@ -15,15 +15,14 @@ export default function FavoritesPage() {
   const user = useAuthStore((state) => state.user);
   const router = useRouter();
 
+  const userRole = user?.role;
   useEffect(() => {
-    // Redirect admin users to admin pages
-    if (user?.role === 'admin') {
+    if (userRole === 'admin') {
       router.push('/admin/orders');
-      return;
     }
-  }, [user, router]);
+  }, [userRole, router]);
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-[#FCFCFC] flex flex-col">
       <Header />
       <div className="container mx-auto px-3 md:px-4 py-4 md:py-8">
         <div className="flex flex-col md:flex-row gap-4 md:gap-6">

@@ -5,11 +5,13 @@ import Header from '@/components/layout/Header';
 import AdminNav from '@/components/admin/AdminNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import ProductModal from '@/components/admin/ProductModal';
 import api from '@/lib/api';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import Image from 'next/image';
 import { getImageUrl } from '@/lib/image-utils';
+import { Search, X } from 'lucide-react';
 
 interface ProductImage {
   url: string;
@@ -38,7 +40,18 @@ export default function AdminProductsPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const { isAdmin, isChecking } = useAdminAuth();
+
+  // Filter products based on search query
+  const filteredProducts = products.filter(product => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      product.name.toLowerCase().includes(query) ||
+      product.code.toLowerCase().includes(query)
+    );
+  });
 
   const fetchProducts = async () => {
     try {
@@ -109,23 +122,45 @@ export default function AdminProductsPage() {
               Дэлгүүрийн бүх барааг удирдах
             </p>
           </div>
-          <Button 
-            onClick={() => {
-              setEditingProduct(null);
-              setModalOpen(true);
-            }}
-            size="sm"
-            className="w-full md:w-auto"
-          >
-            Бараа нэмэх
-          </Button>
+          
+          {/* Search and Add Button */}
+          <div className="flex gap-2 items-center">
+            <div className="relative flex-1 md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Хайх..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-8 h-9 text-sm"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full"
+                >
+                  <X className="w-3 h-3 text-gray-400" />
+                </button>
+              )}
+            </div>
+            <Button 
+              onClick={() => {
+                setEditingProduct(null);
+                setModalOpen(true);
+              }}
+              size="sm"
+              className="whitespace-nowrap"
+            >
+              Бараа нэмэх
+            </Button>
+          </div>
         </div>
 
         {loading ? (
           <div className="text-center py-8 md:py-12 text-sm md:text-base">Ачааллаж байна...</div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-6">
-            {products.map((product) => {
+            {filteredProducts.map((product) => {
               const mainImage = product.images.find(img => img.isMain) || product.images[0];
               return (
                 <Card key={product._id} className="bg-white rounded-md md:rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col h-full">

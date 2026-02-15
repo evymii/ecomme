@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import ProductCard from '@/components/products/ProductCard';
-import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/utils';
@@ -13,6 +12,7 @@ import { cn } from '@/lib/utils';
 interface Product {
   _id: string;
   name: string;
+  code?: string;
   price: number;
   images: Array<{ url: string; isMain: boolean }>;
   features: {
@@ -88,68 +88,72 @@ function ProductsContent() {
     }
   };
 
+  // Get current category name for display
+  const selectedCategoryName = selectedCategoryId 
+    ? categories.find(c => c._id === selectedCategoryId)?.name || 'Бүтээгдэхүүн'
+    : 'Бүх бүтээгдэхүүн';
+
   return (
-    <>
-      <div className="flex flex-col md:flex-row gap-4 md:gap-8">
-        {/* Sidebar - Categories */}
-        <aside className="w-full md:w-64 flex-shrink-0">
-          <div className="bg-white border rounded-lg p-4">
-            <h2 className="font-semibold text-sm md:text-base mb-3 md:mb-4">Ангилал</h2>
-            <div className="space-y-2">
-              <button
-                onClick={() => handleCategoryClick(null)}
-                className={cn(
-                  'w-full text-left px-3 py-2 text-xs md:text-sm rounded-md transition-colors',
-                  selectedCategoryId === null
-                    ? 'bg-black text-white font-medium'
-                    : 'text-gray-700 hover:bg-gray-100'
-                )}
-              >
-                Бүх бүтээгдэхүүн
-              </button>
-              {categories.map((category) => (
-                <button
-                  key={category._id}
-                  onClick={() => handleCategoryClick(category._id)}
-                  className={cn(
-                    'w-full text-left px-3 py-2 text-xs md:text-sm rounded-md transition-colors',
-                    selectedCategoryId === category._id
-                      ? 'bg-black text-white font-medium'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  )}
-                >
-                  {category.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        </aside>
-
-        {/* Main Content */}
-        <div className="flex-1">
-          <div className="flex items-center justify-between mb-4 md:mb-6">
-            <h1 className="text-xl md:text-3xl font-semibold md:font-bold">
-              Бүтээгдэхүүнүүд
-            </h1>
-            {/* Sort options can be added here */}
-          </div>
-
-          {loading ? (
-            <div className="text-center py-8 md:py-12 text-sm md:text-base">Ачааллаж байна...</div>
-          ) : products.length === 0 ? (
-            <div className="text-center py-8 md:py-12 text-xs md:text-sm text-gray-400">
-              Бараа олдсонгүй
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-6">
-              {products.map((product, index) => (
-                <ProductCard key={product._id} product={product} priority={index < 4} />
-              ))}
-            </div>
-          )}
-        </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
+      {/* Page Title */}
+      <div className="mb-6 md:mb-8">
+        <h1 
+          className="text-2xl md:text-3xl text-[#02111B] tracking-tight mb-2"
+          style={{ fontWeight: 600 }}
+        >
+          {selectedCategoryName}
+        </h1>
+        <p className="text-sm text-[#5D737E] font-light">
+          {products.length > 0 ? `${products.length} бүтээгдэхүүн` : ''}
+        </p>
       </div>
-    </>
+
+      {/* Category Filters - Horizontal Pills */}
+      <div className="flex gap-2.5 overflow-x-auto pb-4 mb-6 md:mb-8 scrollbar-hide">
+        <button
+          onClick={() => handleCategoryClick(null)}
+          className={cn(
+            'px-5 py-2 rounded-full whitespace-nowrap transition-all duration-300 text-sm font-light tracking-wide',
+            selectedCategoryId === null
+              ? 'bg-[#02111B] text-white shadow-lg scale-105'
+              : 'bg-white text-[#5D737E] border border-[#02111B]/10 hover:border-[#5D737E]/30'
+          )}
+        >
+          Бүгд
+        </button>
+        {categories.map((category) => (
+          <button
+            key={category._id}
+            onClick={() => handleCategoryClick(category._id)}
+            className={cn(
+              'px-5 py-2 rounded-full whitespace-nowrap transition-all duration-300 text-sm font-light tracking-wide',
+              selectedCategoryId === category._id
+                ? 'bg-[#02111B] text-white shadow-lg scale-105'
+                : 'bg-white text-[#5D737E] border border-[#02111B]/10 hover:border-[#5D737E]/30'
+            )}
+          >
+            {category.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Products Grid */}
+      {loading ? (
+        <div className="text-center py-16">
+          <p className="text-[#5D737E] text-sm font-light">Ачааллаж байна...</p>
+        </div>
+      ) : products.length === 0 ? (
+        <div className="text-center py-16">
+          <p className="text-[#5D737E] font-light">Бараа олдсонгүй</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
+          {products.map((product, index) => (
+            <ProductCard key={product._id} product={product} priority={index < 4} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -161,18 +165,22 @@ export default function ProductsPage() {
   const router = useRouter();
 
   // Redirect admin users to admin pages
+  const userRole = user?.role;
   useEffect(() => {
-    if (user?.role === 'admin') {
+    if (userRole === 'admin') {
       router.push('/admin/orders');
-      return;
     }
-  }, [user, router]);
+  }, [userRole, router]);
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen bg-[#FCFCFC] flex flex-col">
       <Header />
-      <main className="container mx-auto px-4 py-4 md:py-8 flex-1">
-        <Suspense fallback={<div className="text-center py-8 md:py-12 text-sm md:text-base">Ачааллаж байна...</div>}>
+      <main className="flex-1">
+        <Suspense fallback={
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
+            <p className="text-[#5D737E] text-sm font-light">Ачааллаж байна...</p>
+          </div>
+        }>
           <ProductsContent />
         </Suspense>
       </main>
