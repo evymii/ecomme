@@ -123,6 +123,11 @@ export const getDiscountedProducts = async (req: Request, res: Response): Promis
   }
 };
 
+// Escape special regex characters to prevent MongoDB regex errors
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // Search products by name (Mongolian/English) or product code
 export const searchProducts = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -134,13 +139,14 @@ export const searchProducts = async (req: Request, res: Response): Promise<void>
     }
     
     const searchQuery = q.trim();
+    const escapedQuery = escapeRegex(searchQuery);
     
     // Search by name (supports Mongolian and English) or product code
     // Using regex for partial matching, case-insensitive
     const products = await Product.find({
       $or: [
-        { name: { $regex: searchQuery, $options: 'i' } },
-        { code: { $regex: searchQuery, $options: 'i' } }
+        { name: { $regex: escapedQuery, $options: 'i' } },
+        { code: { $regex: escapedQuery, $options: 'i' } }
       ]
     })
       .select('name price images features stock category createdAt code')
@@ -150,6 +156,7 @@ export const searchProducts = async (req: Request, res: Response): Promise<void>
     
     res.json({ success: true, products });
   } catch (error: any) {
+    console.error('Search error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
