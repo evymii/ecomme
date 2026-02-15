@@ -52,7 +52,7 @@ export const createOrder = async (req: Request | AuthRequest, res: Response): Pr
     const productsToUpdate: Array<{ product: any; newStock: number }> = [];
 
     // Optimize: Fetch all products at once instead of one by one
-    const productIds = items.map(item => item.productId);
+    const productIds = items.map((item: { productId: string; quantity: number; size?: string }) => item.productId);
     const products = await Product.find({ _id: { $in: productIds } })
       .session(session); // Don't use lean() - we need full documents to save
     
