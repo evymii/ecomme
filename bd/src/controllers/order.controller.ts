@@ -51,9 +51,17 @@ export const createOrder = async (req: Request | AuthRequest, res: Response): Pr
     const orderItems = [];
     const productsToUpdate: Array<{ product: any; newStock: number }> = [];
 
+    // Optimize: Fetch all products at once instead of one by one
+    const productIds = items.map(item => item.productId);
+    const products = await Product.find({ _id: { $in: productIds } })
+      .session(session); // Don't use lean() - we need full documents to save
+    
+    // Create a map for quick lookup
+    const productMap = new Map(products.map(p => [p._id.toString(), p]));
+    
     // Validate all products and calculate total (within transaction)
     for (const item of items) {
-      const product = await Product.findById(item.productId).session(session);
+      const product = productMap.get(item.productId);
       if (!product) {
         await session.abortTransaction();
         session.endSession();
@@ -127,27 +135,34 @@ export const createOrder = async (req: Request | AuthRequest, res: Response): Pr
       createdAt: savedOrder.createdAt
     });
     
-    // Populate the order before sending response (outside transaction)
-    const populatedOrder = await Order.findById(savedOrder._id)
-      .populate('user', 'name phoneNumber email')
-      .populate('items.product');
-
-    if (!populatedOrder) {
-      console.error('❌ Failed to populate order after save');
-      res.status(500).json({ success: false, message: 'Захиалга үүсгэхэд алдаа гарлаа' });
-      return;
-    }
-
-    console.log('✅ Order populated and ready to send:', {
-      orderId: populatedOrder._id.toString(),
-      user: populatedOrder.user,
-      itemsCount: populatedOrder.items.length
-    });
+    // Return order immediately without populate to avoid timeout
+    // Populate can be done later when viewing order details
+    // This makes the response much faster
+    const orderResponse = {
+      _id: savedOrder._id,
+      orderCode: savedOrder.orderCode,
+      items: savedOrder.items.map((item: any) => ({
+        product: item.product,
+        quantity: item.quantity,
+        price: item.price,
+        size: item.size
+      })),
+      total: savedOrder.total,
+      status: savedOrder.status,
+      deliveryAddress: savedOrder.deliveryAddress,
+      paymentMethod: savedOrder.paymentMethod,
+      phoneNumber: savedOrder.phoneNumber,
+      email: savedOrder.email,
+      customerName: savedOrder.customerName,
+      user: savedOrder.user || null,
+      createdAt: savedOrder.createdAt,
+      updatedAt: savedOrder.updatedAt
+    };
 
     res.status(201).json({
       success: true,
       message: 'Захиалга амжилттай үүслээ',
-      order: populatedOrder
+      order: orderResponse
     });
   } catch (error: any) {
     // Rollback transaction on error

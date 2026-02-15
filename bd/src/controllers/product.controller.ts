@@ -122,3 +122,34 @@ export const getDiscountedProducts = async (req: Request, res: Response): Promis
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// Search products by name (Mongolian/English) or product code
+export const searchProducts = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { q } = req.query;
+    
+    if (!q || typeof q !== 'string' || q.trim().length < 1) {
+      res.json({ success: true, products: [] });
+      return;
+    }
+    
+    const searchQuery = q.trim();
+    
+    // Search by name (supports Mongolian and English) or product code
+    // Using regex for partial matching, case-insensitive
+    const products = await Product.find({
+      $or: [
+        { name: { $regex: searchQuery, $options: 'i' } },
+        { code: { $regex: searchQuery, $options: 'i' } }
+      ]
+    })
+      .select('name price images features stock category createdAt code')
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean();
+    
+    res.json({ success: true, products });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
