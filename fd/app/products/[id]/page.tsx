@@ -3,13 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { ArrowLeft, ShoppingCart, Truck, Shield } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Truck, Shield, Heart } from 'lucide-react';
+import Loader from '@/components/ui/Loader';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import ProductCard from '@/components/products/ProductCard';
 import api from '@/lib/api';
 import { getImageUrl } from '@/lib/image-utils';
 import { useCartStore } from '@/store/cart-store';
+import { useFavoritesStore } from '@/store/favorites-store';
 import { useAuthStore } from '@/store/auth-store';
 
 interface ProductImage {
@@ -46,6 +48,8 @@ export default function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1);
   const [selectedSize, setSelectedSize] = useState<string>('');
   const addItem = useCartStore((state) => state.addItem);
+  const toggleFavorite = useFavoritesStore((state) => state.toggleFavorite);
+  const favItems = useFavoritesStore((state) => state.items);
   const user = useAuthStore((state) => state.user);
 
   // Redirect admin users
@@ -135,16 +139,7 @@ export default function ProductDetailPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[#FCFCFC]">
-        <Header />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="text-center py-12">
-            <p className="text-[#5D737E] text-sm font-light">Ачааллаж байна...</p>
-          </div>
-        </main>
-      </div>
-    );
+    return <Loader />;
   }
 
   if (!product) {
@@ -352,14 +347,39 @@ export default function ProductDetailPage() {
 
               {/* Action Buttons */}
               <div className="space-y-3 pt-2">
-                <button
-                  onClick={handleAddToCart}
-                  disabled={isOutOfStock}
-                  className="w-full h-12 px-6 border border-[#02111B]/20 text-[#02111B] rounded-full hover:bg-white hover:border-[#5D737E]/30 transition-all duration-300 font-light text-sm flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <ShoppingCart className="w-4 h-4" />
-                  {isOutOfStock ? 'Дууссан' : 'Сагслах'}
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleAddToCart}
+                    disabled={isOutOfStock}
+                    className="flex-1 h-12 px-6 border border-[#02111B]/20 text-[#02111B] rounded-full hover:bg-white hover:border-[#5D737E]/30 transition-all duration-300 font-light text-sm flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ShoppingCart className="w-4 h-4" />
+                    {isOutOfStock ? 'Дууссан' : 'Сагслах'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!product) return;
+                      const mainImg = product.images.find(img => img.isMain) || product.images[0];
+                      toggleFavorite({
+                        _id: product._id,
+                        name: product.name,
+                        price: product.price,
+                        code: product.code,
+                        image: mainImg?.url,
+                        category: product.category,
+                      });
+                    }}
+                    className="w-12 h-12 border border-[#02111B]/20 rounded-full flex items-center justify-center hover:border-[#5D737E]/30 transition-all duration-300"
+                  >
+                    <Heart
+                      className={`w-5 h-5 transition-colors ${
+                        favItems.some(item => item._id === product._id)
+                          ? 'fill-red-500 text-red-500'
+                          : 'text-[#3F4045]'
+                      }`}
+                    />
+                  </button>
+                </div>
                 <button
                   onClick={() => {
                     handleAddToCart();

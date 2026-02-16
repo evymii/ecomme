@@ -5,6 +5,18 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth-store';
 import api from '@/lib/api';
 
+// Set a cookie to let Next.js middleware know the user is admin-verified
+function setAdminCookie(verified: boolean) {
+  if (typeof document === 'undefined') return;
+  if (verified) {
+    // Set cookie that expires in 30 days (matches JWT)
+    document.cookie = `admin_verified=true; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+  } else {
+    // Clear the cookie
+    document.cookie = 'admin_verified=; path=/; max-age=0; SameSite=Lax';
+  }
+}
+
 export function useAdminAuth() {
   const user = useAuthStore((state) => state.user);
   const router = useRouter();
@@ -39,6 +51,7 @@ export function useAdminAuth() {
             useAuthStore.getState().setToken(localStorageToken);
           }
           if (isMounted) {
+            setAdminCookie(true);
             setIsAdmin(true);
             setIsChecking(false);
           }
@@ -47,6 +60,7 @@ export function useAdminAuth() {
 
         // If no token at all, redirect
         if (!token) {
+          setAdminCookie(false);
           if (isMounted && !hasRedirectedRef.current) {
             setIsChecking(false);
             setIsAdmin(false);
@@ -77,11 +91,13 @@ export function useAdminAuth() {
             }
             
             if (isMounted) {
+              setAdminCookie(true);
               setIsAdmin(true);
               setIsChecking(false);
             }
           } else {
             // Not admin - redirect
+            setAdminCookie(false);
             if (isMounted && !hasRedirectedRef.current) {
               setIsChecking(false);
               setIsAdmin(false);
@@ -95,6 +111,7 @@ export function useAdminAuth() {
           // If 401/403, token is invalid or expired
           if (error.response?.status === 401 || error.response?.status === 403) {
             // Clear invalid token
+            setAdminCookie(false);
             useAuthStore.getState().logout();
             if (isMounted && !hasRedirectedRef.current) {
               setIsChecking(false);
@@ -121,11 +138,13 @@ export function useAdminAuth() {
                   id: profileResponse.data.user.id || profileResponse.data.user._id
                 });
                 if (isMounted) {
+                  setAdminCookie(true);
                   setIsAdmin(true);
                   setIsChecking(false);
                 }
               } else {
                 // Not admin
+                setAdminCookie(false);
                 if (isMounted && !hasRedirectedRef.current) {
                   setIsChecking(false);
                   setIsAdmin(false);
@@ -138,6 +157,7 @@ export function useAdminAuth() {
               if (fallbackError.response?.status === 401) {
                 useAuthStore.getState().logout();
               }
+              setAdminCookie(false);
               if (isMounted && !hasRedirectedRef.current) {
                 setIsChecking(false);
                 setIsAdmin(false);
@@ -149,6 +169,7 @@ export function useAdminAuth() {
         }
       } catch (error) {
         console.error('Auth check error:', error);
+        setAdminCookie(false);
         if (isMounted && !hasRedirectedRef.current) {
           setIsChecking(false);
           setIsAdmin(false);

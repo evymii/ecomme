@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
+import Loader from '@/components/ui/Loader';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -16,11 +17,7 @@ export default function AdminDashboard() {
   }, [isAdmin, isChecking, router]);
 
   if (isChecking) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p>Шалгаж байна...</p>
-      </div>
-    );
+    return <Loader />;
   }
 
   if (!isAdmin) {

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Header from '@/components/layout/Header';
-import AdminNav from '@/components/admin/AdminNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,6 +11,8 @@ import { useAdminAuth } from '@/hooks/useAdminAuth';
 import Image from 'next/image';
 import { getImageUrl } from '@/lib/image-utils';
 import { Search, X } from 'lucide-react';
+import Loader from '@/components/ui/Loader';
+import { PageLoader } from '@/components/ui/Loader';
 
 interface ProductImage {
   url: string;
@@ -97,11 +98,7 @@ export default function AdminProductsPage() {
   };
 
   if (isChecking) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p>Шалгаж байна...</p>
-      </div>
-    );
+    return <Loader />;
   }
 
   if (!isAdmin) {
@@ -111,7 +108,6 @@ export default function AdminProductsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <AdminNav />
       <main className="container mx-auto px-3 md:px-4 py-4 md:py-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 mb-4 md:mb-8">
           <div>
@@ -157,7 +153,7 @@ export default function AdminProductsPage() {
         </div>
 
         {loading ? (
-          <div className="text-center py-8 md:py-12 text-sm md:text-base">Ачааллаж байна...</div>
+          <PageLoader />
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-6">
             {filteredProducts.map((product) => {

@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import AuthProvider from "@/components/providers/AuthProvider";
 import ScrollToTop from "@/components/providers/ScrollToTop";
+import { ClerkProvider } from "@clerk/nextjs";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,14 +19,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="mn">
-      <body className={inter.className}>
-        <AuthProvider>
-          <ScrollToTop />
-          {children}
-          <Toaster />
-        </AuthProvider>
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="mn">
+        <body className={inter.className}>
+          <AuthProvider>
+            <ScrollToTop />
+            {children}
+            <Toaster />
+          </AuthProvider>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

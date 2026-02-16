@@ -5,13 +5,12 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import ProductCard from '@/components/products/ProductCard';
 import Loader from '@/components/ui/Loader';
+import { PageLoader } from '@/components/ui/Loader';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth-store';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
-import { getImageUrl } from '@/lib/image-utils';
-import { ChevronRight, Zap, Shield, Truck } from 'lucide-react';
+import { ChevronRight, Zap, Shield, Package } from 'lucide-react';
 
 interface Product {
   _id: string;
@@ -103,9 +102,16 @@ export default function HomePage() {
     }
   };
 
-  // Get hero image from the first featured product
-  const heroProduct = featuredProducts[0] || discountedProducts[0];
-  const heroImage = heroProduct?.images?.find(img => img.isMain) || heroProduct?.images?.[0];
+  // Rotating category index for hero bar
+  const [activeCategoryIndex, setActiveCategoryIndex] = useState(0);
+
+  useEffect(() => {
+    if (categories.length === 0) return;
+    const interval = setInterval(() => {
+      setActiveCategoryIndex((prev) => (prev + 1) % categories.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [categories.length]);
 
   if (initialLoad && loading) {
     return <Loader />;
@@ -117,89 +123,61 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#FCFCFC] flex flex-col" style={{ fontFamily: "'Inter', -apple-system, system-ui, sans-serif" }}>
       <Header />
 
-      {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Text Content */}
-            <div className="space-y-6">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#5D737E]/10 to-transparent rounded-full border border-[#5D737E]/20">
-                <Zap className="w-4 h-4 text-[#5D737E]" />
-                <span className="text-sm text-[#5D737E] font-light tracking-wide">Шинэ бүтээгдэхүүн ирлээ</span>
-              </div>
-              
-              <h1 
-                className="text-[#02111B] leading-tight tracking-tight"
-                style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)', fontWeight: 600 }}
-              >
-                Чанартай бараа
-                <br />
-                <span className="text-[#5D737E]" style={{ fontWeight: 300 }}>таны гарт</span>
-              </h1>
-              
-              <p className="text-[#3F4045] max-w-md font-light leading-relaxed" style={{ fontWeight: 300 }}>
-                Бид чанартай, загварлаг бүтээгдэхүүнийг хамгийн тохиромжтой үнээр санал болгож байна.
-              </p>
+      {/* Hero Bar - compact single row */}
+      <section className="border-b border-[#02111B]/5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between py-3">
+            {/* Left: New arrival badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#02111B]/5 rounded-full flex-shrink-0">
+              <Zap className="w-3.5 h-3.5 text-[#02111B]" />
+              <span className="text-sm text-[#02111B] font-medium tracking-tight whitespace-nowrap">Шинэ бүтээгдэхүүн ирлээ</span>
+            </div>
 
-              <div className="flex flex-wrap gap-3">
-                <Link 
-                  href="/products" 
-                  className="px-6 py-3 bg-[#02111B] text-white rounded-full hover:bg-[#3F4045] transition-all duration-300 hover:shadow-xl hover:scale-105 flex items-center gap-2 font-light text-sm"
-                >
-                  Худалдан авах
-                  <ChevronRight className="w-4 h-4" />
-                </Link>
+            {/* Center: Features */}
+            <div className="hidden sm:flex items-center gap-5">
+              <div className="flex items-center gap-1.5">
+                <Shield className="w-4 h-4 text-[#3F4045]" />
+                <span className="text-sm text-[#3F4045] font-light whitespace-nowrap">Баталгаа</span>
               </div>
-
-              {/* Features */}
-              <div className="grid grid-cols-3 gap-4 pt-6">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-[#5D737E]/10 flex items-center justify-center">
-                    <Shield className="w-4 h-4 text-[#5D737E]" />
-                  </div>
-                  <span className="text-xs text-[#3F4045] font-light">Баталгаа</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-[#30292F]/10 flex items-center justify-center">
-                    <Truck className="w-4 h-4 text-[#30292F]" />
-                  </div>
-                  <span className="text-xs text-[#3F4045] font-light">Хүргэлт</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-[#02111B]/10 flex items-center justify-center">
-                    <Zap className="w-4 h-4 text-[#02111B]" />
-                  </div>
-                  <span className="text-xs text-[#3F4045] font-light">Хурдан</span>
-                </div>
+              <div className="flex items-center gap-1.5">
+                <Package className="w-4 h-4 text-[#3F4045]" />
+                <span className="text-sm text-[#3F4045] font-light whitespace-nowrap">Хүргэлт</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-[#3F4045]" />
+                <span className="text-sm text-[#3F4045] font-light whitespace-nowrap">Хурдан</span>
               </div>
             </div>
 
-            {/* Hero Image */}
-            <div className="relative lg:h-[500px] hidden lg:block">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#5D737E]/10 via-transparent to-[#02111B]/5 rounded-3xl" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="relative w-full h-full flex items-center justify-center">
-                  <div className="absolute w-64 h-64 bg-gradient-to-br from-[#5D737E]/20 to-transparent rounded-full blur-3xl" />
-                  {heroImage ? (
-                    <div className="relative z-10 w-80 h-80">
-                      <Image
-                        src={getImageUrl(heroImage.url)}
-                        alt="Hero product"
-                        fill
-                        className="object-contain drop-shadow-2xl"
-                        unoptimized
-                        priority
-                        sizes="320px"
-                      />
-                    </div>
-                  ) : (
-                    <div className="relative z-10 w-80 h-80 bg-gradient-to-br from-[#5D737E]/10 to-[#02111B]/5 rounded-3xl flex items-center justify-center">
-                      <span className="text-[#5D737E]/30 font-light text-lg">Az</span>
-                    </div>
-                  )}
-                </div>
+            {/* Right: Rotating category badge */}
+            {categories.length > 0 ? (
+              <div className="relative flex-shrink-0 h-9 w-28 sm:w-32 overflow-hidden">
+                {categories.map((cat, i) => (
+                  <div
+                    key={cat._id}
+                    className="absolute inset-0 flex items-center justify-center transition-all duration-500 ease-in-out"
+                    style={{
+                      opacity: activeCategoryIndex === i ? 1 : 0,
+                      transform: activeCategoryIndex === i 
+                        ? 'translateY(0)' 
+                        : activeCategoryIndex > i || (activeCategoryIndex === 0 && i === categories.length - 1 && i !== 0)
+                          ? 'translateY(-100%)' 
+                          : 'translateY(100%)',
+                    }}
+                  >
+                    <button
+                      onClick={() => handleCategoryFilter(cat.name)}
+                      className="inline-flex items-center gap-2 px-4 py-2 border border-[#02111B]/10 rounded-full hover:bg-[#02111B]/5 transition-colors"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#02111B]" />
+                      <span className="text-sm text-[#02111B] font-medium tracking-tight whitespace-nowrap">{cat.name}</span>
+                    </button>
+                  </div>
+                ))}
               </div>
-            </div>
+            ) : (
+              <div className="w-28 sm:w-32" />
+            )}
           </div>
         </div>
       </section>
@@ -289,9 +267,7 @@ export default function HomePage() {
               <p className="text-[#5D737E] font-light">Бараа олдсонгүй</p>
             </div>
           ) : (
-            <div className="text-center py-16">
-              <p className="text-[#5D737E] font-light text-sm">Ачааллаж байна...</p>
-            </div>
+            <PageLoader />
           )}
         </div>
       </section>

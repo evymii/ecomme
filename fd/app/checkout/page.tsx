@@ -12,6 +12,7 @@ import { useAuthStore } from '@/store/auth-store';
 import api from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, CheckCircle2, Copy } from 'lucide-react';
+import Loader from '@/components/ui/Loader';
 
 type PaymentMethod = 'pay_later' | 'paid_personally' | 'bank_transfer';
 
@@ -42,6 +43,9 @@ export default function CheckoutPage() {
 
   const itemCount = items.length;
   useEffect(() => {
+    // Wait for hydration before checking cart
+    if (!mounted) return;
+    
     // Don't redirect if order was successful - let success page show
     if (orderSuccess) {
       return;
@@ -51,7 +55,7 @@ export default function CheckoutPage() {
     if (itemCount === 0 && !loading) {
       router.push('/');
     }
-  }, [itemCount, orderSuccess, router, loading]);
+  }, [mounted, itemCount, orderSuccess, router, loading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -235,7 +239,12 @@ export default function CheckoutPage() {
     );
   }
 
-  const totalQuantity = mounted ? items.reduce((sum, item) => sum + item.quantity, 0) : 0;
+  // Wait for hydration before rendering to prevent flash of empty cart
+  if (!mounted) {
+    return <Loader />;
+  }
+
+  const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -344,29 +353,56 @@ export default function CheckoutPage() {
                   Захиалагчийн мэдээлэл
                 </h2>
                 <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="phoneNumber" className="text-sm md:text-base">Утасны дугаар *</Label>
-                    <Input
-                      id="phoneNumber"
-                      value={formData.phoneNumber}
-                      onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                      required
-                      placeholder="9900-0000"
-                      className="h-11 md:h-10 text-base md:text-sm"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="email" className="text-sm md:text-base">Имэйл хаяг *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      required
-                      placeholder="name@example.com"
-                      className="h-11 md:h-10 text-base md:text-sm"
-                    />
-                  </div>
+                  {/* If logged in, show phone & email as read-only info */}
+                  {user && user.phoneNumber ? (
+                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-500">Утасны дугаар</span>
+                      </div>
+                      <p className="text-sm md:text-base font-medium">{user.phoneNumber}</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <Label htmlFor="phoneNumber" className="text-sm md:text-base">Утасны дугаар *</Label>
+                      <Input
+                        id="phoneNumber"
+                        value={formData.phoneNumber}
+                        onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+                        required
+                        placeholder="**** ****"
+                        className="h-11 md:h-10 text-base md:text-sm"
+                      />
+                    </div>
+                  )}
+                  {user && user.email ? (
+                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-500">Имэйл хаяг</span>
+                      </div>
+                      <p className="text-sm md:text-base font-medium">{user.email}</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <Label htmlFor="email" className="text-sm md:text-base">Имэйл хаяг *</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        required
+                        placeholder="example@gmail.com"
+                        className="h-11 md:h-10 text-base md:text-sm"
+                      />
+                    </div>
+                  )}
+                  {user && user.name && (
+                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-500">Нэр</span>
+                      </div>
+                      <p className="text-sm md:text-base font-medium">{user.name}</p>
+                    </div>
+                  )}
                   <div>
                     <Label htmlFor="address" className="text-sm md:text-base">Хүргэлтийн хаяг *</Label>
                     <Input

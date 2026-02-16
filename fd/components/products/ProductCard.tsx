@@ -2,9 +2,10 @@
 
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { ShoppingCart } from 'lucide-react';
+import { ShoppingCart, Heart } from 'lucide-react';
 import { useCartStore } from '@/store/cart-store';
-import { useState } from 'react';
+import { useFavoritesStore } from '@/store/favorites-store';
+import { useState, useEffect } from 'react';
 import { getImageUrl } from '@/lib/image-utils';
 
 interface Product {
@@ -32,7 +33,14 @@ export default function ProductCard({ product, priority = false, categoryName }:
   const router = useRouter();
   const [quantity] = useState(1);
   const addItem = useCartStore((state) => state.addItem);
+  const toggleFavorite = useFavoritesStore((state) => state.toggleFavorite);
+  const favItems = useFavoritesStore((state) => state.items);
+  const [isFav, setIsFav] = useState(false);
   const mainImage = product.images.find(img => img.isMain) || product.images[0];
+
+  useEffect(() => {
+    setIsFav(favItems.some(item => item._id === product._id));
+  }, [favItems, product._id]);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -42,6 +50,18 @@ export default function ProductCard({ product, priority = false, categoryName }:
       price: product.price,
       quantity,
       image: mainImage?.url,
+    });
+  };
+
+  const handleToggleFavorite = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleFavorite({
+      _id: product._id,
+      name: product.name,
+      price: product.price,
+      code: product.code,
+      image: mainImage?.url,
+      category: product.category,
     });
   };
 
@@ -97,12 +117,24 @@ export default function ProductCard({ product, priority = false, categoryName }:
 
         {/* Product code overlay */}
         {product.code && (
-          <div className="absolute top-2.5 right-2.5 md:top-3 md:right-3 z-10">
+          <div className="absolute bottom-2.5 left-2.5 md:bottom-3 md:left-3 z-10">
             <span className="px-2 py-0.5 bg-white/80 backdrop-blur-sm text-[#3F4045] rounded-full text-[9px] md:text-[10px] font-mono tracking-wide">
               {product.code}
             </span>
           </div>
         )}
+
+        {/* Favorite Button */}
+        <button
+          onClick={handleToggleFavorite}
+          className="absolute top-2.5 right-2.5 md:top-3 md:right-3 w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center transition-all duration-300 z-20 bg-white/70 backdrop-blur-sm hover:bg-white/90 shadow-sm"
+        >
+          <Heart
+            className={`w-4 h-4 md:w-[18px] md:h-[18px] transition-colors ${
+              isFav ? 'fill-red-500 text-red-500' : 'text-[#3F4045]'
+            }`}
+          />
+        </button>
 
         {/* Quick Add Button */}
         {!isOutOfStock && (

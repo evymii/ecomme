@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Header from '@/components/layout/Header';
-import AdminNav from '@/components/admin/AdminNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import CategoryModal from '@/components/admin/CategoryModal';
@@ -10,6 +9,8 @@ import api from '@/lib/api';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Edit, Trash2 } from 'lucide-react';
+import Loader from '@/components/ui/Loader';
+import { PageLoader } from '@/components/ui/Loader';
 
 interface Category {
   _id: string;
@@ -70,11 +71,7 @@ export default function AdminCategoriesPage() {
   };
 
   if (isChecking) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p>Шалгаж байна...</p>
-      </div>
-    );
+    return <Loader />;
   }
 
   if (!isAdmin) {
@@ -84,7 +81,6 @@ export default function AdminCategoriesPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <AdminNav />
       <main className="container mx-auto px-3 md:px-4 py-4 md:py-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 mb-4 md:mb-8">
           <div>
@@ -108,7 +104,7 @@ export default function AdminCategoriesPage() {
         </div>
 
         {loading ? (
-          <div className="text-center py-8 md:py-12 text-sm md:text-base">Ачааллаж байна...</div>
+          <PageLoader />
         ) : (
           <Card>
             <CardHeader className="p-3 md:p-6">

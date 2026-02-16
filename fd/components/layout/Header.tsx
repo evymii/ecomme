@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { ShoppingCart, User, LogOut, Menu, X, Search } from 'lucide-react';
+import { ShoppingCart, User, LogOut, Menu, X, Search, Heart } from 'lucide-react';
 import { useCartStore } from '@/store/cart-store';
+import { useFavoritesStore } from '@/store/favorites-store';
 import { useAuthStore } from '@/store/auth-store';
 import AuthModal from '@/components/auth/AuthModal';
 import CartSidebar from '@/components/cart/CartSidebar';
@@ -34,6 +35,7 @@ export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const itemCount = useCartStore((state) => state.getItemCount());
+  const favCount = useFavoritesStore((state) => state.getCount());
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const router = useRouter();
@@ -347,6 +349,22 @@ export default function Header() {
                 >
                   <User className="w-5 h-5 text-[#02111B]" />
                 </button>
+              )}
+
+              {/* Favorites (non-admin) */}
+              {!isAdmin && (
+                <Link
+                  href="/profile/favorites"
+                  className="relative p-2 hover:bg-white rounded-full transition-colors"
+                  title="Зүрхэлсэн"
+                >
+                  <Heart className="w-5 h-5 text-[#02111B]" />
+                  {mounted && favCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-medium">
+                      {favCount}
+                    </span>
+                  )}
+                </Link>
               )}
 
               {/* Cart (non-admin) */}

@@ -8,6 +8,7 @@ import ProductCard from '@/components/products/ProductCard';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/utils';
+import { PageLoader } from '@/components/ui/Loader';
 
 interface Product {
   _id: string;
@@ -139,9 +140,7 @@ function ProductsContent() {
 
       {/* Products Grid */}
       {loading ? (
-        <div className="text-center py-16">
-          <p className="text-[#5D737E] text-sm font-light">Ачааллаж байна...</p>
-        </div>
+        <PageLoader />
       ) : products.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-[#5D737E] font-light">Бараа олдсонгүй</p>
@@ -177,8 +176,8 @@ export default function ProductsPage() {
       <Header />
       <main className="flex-1">
         <Suspense fallback={
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
-            <p className="text-[#5D737E] text-sm font-light">Ачааллаж байна...</p>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <PageLoader />
           </div>
         }>
           <ProductsContent />

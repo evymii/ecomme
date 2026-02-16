@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
-import AdminNav from '@/components/admin/AdminNav';
 import { getImageUrl } from '@/lib/image-utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import Loader from '@/components/ui/Loader';
+import { PageLoader } from '@/components/ui/Loader';
 import api from '@/lib/api';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -164,11 +165,7 @@ export default function AdminOrdersPage() {
   };
 
   if (isChecking) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p>Шалгаж байна...</p>
-      </div>
-    );
+    return <Loader />;
   }
 
   if (!isAdmin) {
@@ -178,7 +175,6 @@ export default function AdminOrdersPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <AdminNav />
       <main className="container mx-auto px-3 md:px-4 py-4 md:py-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 mb-4 md:mb-8">
           <h1 className="text-xl md:text-3xl font-semibold md:font-bold">Захиалга</h1>
@@ -220,7 +216,7 @@ export default function AdminOrdersPage() {
         </div>
 
         {loading ? (
-          <div className="text-center py-12">Ачааллаж байна...</div>
+          <PageLoader />
         ) : (
           <Card>
             <CardHeader className="p-3 md:p-6">

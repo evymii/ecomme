@@ -13,6 +13,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import Sidebar from '@/components/profile/Sidebar';
+import { PageLoader } from '@/components/ui/Loader';
 
 const cities = ['Улаанбаатар'];
 const districts: Record<string, string[]> = {
@@ -155,7 +156,7 @@ export default function ProfilePage() {
               </CardHeader>
               <CardContent className="p-4 md:p-6">
                 {loading ? (
-                  <div className="text-center py-8 md:py-12 text-sm md:text-base">Ачааллаж байна...</div>
+                  <PageLoader />
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

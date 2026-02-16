@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import Header from '@/components/layout/Header';
-import AdminNav from '@/components/admin/AdminNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import api from '@/lib/api';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useToast } from '@/hooks/use-toast';
+import Loader from '@/components/ui/Loader';
+import { PageLoader } from '@/components/ui/Loader';
 
 interface User {
   _id: string;
@@ -44,15 +45,26 @@ export default function AdminUsersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]); // Only depend on isAdmin, not isChecking
 
-  const handleRoleChange = async (userId: string, newRole: 'admin' | 'user') => {
+  const handleRoleChange = async (userId: string, currentRole: string, newRole: 'admin' | 'user') => {
+    // Skip if the role hasn't changed
+    if (currentRole === newRole) return;
+
+    // Optimistically update the UI
+    setUsers((prev) =>
+      prev.map((u) => (u._id === userId ? { ...u, role: newRole } : u))
+    );
+
     try {
       await api.put(`/admin/users/${userId}/role`, { role: newRole });
       toast({
         title: 'Амжилттай',
-        description: 'Хэрэглэгчийн эрх шинэчлэгдлээ',
+        description: `Эрх "${newRole === 'admin' ? 'Админ' : 'Хэрэглэгч'}" болгож шинэчлэгдлээ`,
       });
-      fetchUsers();
     } catch (error: any) {
+      // Revert on failure
+      setUsers((prev) =>
+        prev.map((u) => (u._id === userId ? { ...u, role: currentRole as 'admin' | 'user' } : u))
+      );
       toast({
         title: 'Алдаа',
         description: error.response?.data?.message || 'Алдаа гарлаа',
@@ -62,11 +74,7 @@ export default function AdminUsersPage() {
   };
 
   if (isChecking) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p>Шалгаж байна...</p>
-      </div>
-    );
+    return <Loader />;
   }
 
   if (!isAdmin) {
@@ -76,7 +84,6 @@ export default function AdminUsersPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <AdminNav />
       <main className="container mx-auto px-3 md:px-4 py-4 md:py-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 md:mb-8">
           <div>
@@ -97,7 +104,7 @@ export default function AdminUsersPage() {
         </div>
 
         {loading ? (
-          <div className="text-center py-8 md:py-12 text-sm md:text-base">Ачааллаж байна...</div>
+          <PageLoader />
         ) : (
           <Card>
             <CardHeader className="p-3 md:p-6">
@@ -132,7 +139,7 @@ export default function AdminUsersPage() {
                             <Select
                               value={u.role}
                               onValueChange={(value: 'admin' | 'user') =>
-                                handleRoleChange(u._id, value)
+                                handleRoleChange(u._id, u.role, value)
                               }
                             >
                               <SelectTrigger className="w-24 md:w-32 h-8 md:h-10 text-xs md:text-sm">
