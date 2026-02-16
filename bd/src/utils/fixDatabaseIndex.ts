@@ -17,33 +17,33 @@ export const fixDatabaseIndexes = async (): Promise<void> => {
     
     console.log('Current indexes:', indexes.map(idx => idx.name));
 
-    // Check for old clerkld index
-    const clerkldIndex = indexes.find(idx => idx.name === 'clerkld_1' || idx.key?.clerkld);
-    
-    if (clerkldIndex) {
-      console.log('Found old clerkld index, attempting to drop...');
-      try {
-        if (clerkldIndex.name) {
-          await usersCollection.dropIndex(clerkldIndex.name);
-          console.log('✅ Successfully dropped clerkld index');
-        } else {
-          // Try alternative method if name is not available
-          await usersCollection.dropIndex({ clerkld: 1 } as any);
-          console.log('✅ Successfully dropped clerkld index (alternative method)');
-        }
-      } catch (error: any) {
-        console.error('Error dropping clerkld index:', error.message);
-        // Try alternative method
+    // Drop all stale clerk-related indexes (clerkld_1, clerkId_1, etc.)
+    const staleIndexNames = ['clerkld_1', 'clerkId_1', 'clerkUserId_1'];
+    for (const idxName of staleIndexNames) {
+      const found = indexes.find(idx => idx.name === idxName);
+      if (found) {
+        console.log(`Found stale index "${idxName}", dropping...`);
         try {
-          await usersCollection.dropIndex({ clerkld: 1 } as any);
-          console.log('✅ Successfully dropped clerkld index (alternative method)');
-        } catch (altError: any) {
-          console.error('Could not drop clerkld index:', altError.message);
-          console.log('⚠️  You may need to manually drop this index in MongoDB');
+          await usersCollection.dropIndex(idxName);
+          console.log(`✅ Dropped stale index "${idxName}"`);
+        } catch (error: any) {
+          console.error(`Error dropping "${idxName}":`, error.message);
         }
       }
-    } else {
-      console.log('✅ No clerkld index found, database is clean');
+    }
+
+    // Also drop any index on clerkId or clerkld fields (by key, not name)
+    for (const idx of indexes) {
+      if (idx.key && (idx.key.clerkId !== undefined || idx.key.clerkld !== undefined || idx.key.clerkUserId !== undefined)) {
+        try {
+          await usersCollection.dropIndex(idx.name!);
+          console.log(`✅ Dropped index "${idx.name}" (stale clerk field)`);
+        } catch (error: any) {
+          if (error.code !== 27) {
+            console.error(`Error dropping "${idx.name}":`, error.message);
+          }
+        }
+      }
     }
 
     // Ensure required indexes exist (non-unique, allowing duplicates)

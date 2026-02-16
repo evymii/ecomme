@@ -211,9 +211,21 @@ export const getUserOrders = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const orders = await Order.find({ user: req.userId })
+    // Get the user's phone number to also match guest orders placed with the same phone
+    const user = await User.findById(req.userId).select('phoneNumber').lean();
+    const phoneNumber = user?.phoneNumber;
+
+    // Build query: match by user ID OR by phone number
+    const query: any[] = [{ user: req.userId }];
+    if (phoneNumber) {
+      query.push({ phoneNumber: phoneNumber, user: { $exists: false } });
+      query.push({ phoneNumber: phoneNumber, user: null });
+    }
+
+    const orders = await Order.find({ $or: query })
       .populate('items.product')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json({ success: true, orders });
   } catch (error: any) {

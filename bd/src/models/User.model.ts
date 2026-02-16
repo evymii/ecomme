@@ -4,9 +4,9 @@ export interface IUser extends Document {
   phoneNumber: string;
   email: string;
   name: string;
-  password: string; // Hashed password
+  password: string; // Hashed password or 'clerk-managed'
   role: 'admin' | 'user';
-  isEmailVerified?: boolean; // Email verification status (phone number is NOT verified)
+  isEmailVerified?: boolean; // Email verification status
   emailVerificationToken?: string; // Token for email verification
   address?: {
     city: string;

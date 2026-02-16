@@ -76,7 +76,7 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       console.log('Auth check failed (user not authenticated), proceeding with signup');
     }
 
-    const { phoneNumber, email, name, password } = req.body;
+    const { phoneNumber, email, name, password, emailVerified } = req.body;
 
     // Validate all fields are provided and not empty
     if (!phoneNumber || !email || !name || !password) {
@@ -143,19 +143,19 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Generate email verification token (email will be verified, phone number is NOT verified)
-    const emailVerificationToken = crypto.randomBytes(32).toString('hex');
+    // Generate email verification token if not already verified by Clerk
+    const emailVerificationToken = emailVerified ? undefined : crypto.randomBytes(32).toString('hex');
 
     // Create user in database
     // First user with specific email becomes admin, or you can set manually
     const isFirstAdmin = normalizedEmail === 'n.munkhpurev@gmail.com' || normalizedEmail === 'admin@example.com';
     const user = new User({
-      phoneNumber: cleanPhoneNumber, // Clean phone number (no spaces/dashes)
-      email: normalizedEmail, // Normalize email
-      name: trimmedName, // Trimmed name
+      phoneNumber: cleanPhoneNumber,
+      email: normalizedEmail,
+      name: trimmedName,
       password: hashedPassword,
       role: isFirstAdmin ? 'admin' : 'user',
-      isEmailVerified: false, // Email needs verification (phone number is NOT verified)
+      isEmailVerified: emailVerified === true, // true if Clerk verified the email
       emailVerificationToken
     });
 
@@ -215,6 +215,21 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       success: false,
       message: errorMessage
     });
+  }
+};
+
+export const checkEmail = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.json({ success: true, exists: false });
+      return;
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail }).select('_id').lean();
+    res.json({ success: true, exists: !!user });
+  } catch (error: any) {
+    res.json({ success: true, exists: false });
   }
 };
 
@@ -297,6 +312,97 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({
       success: false,
       message: error.message || 'Нэвтрэхэд алдаа гарлаа'
+    });
+  }
+};
+
+// ========== CLERK SYNC ==========
+// Called after Clerk authentication to create/find user in our DB and return our JWT
+export const clerkSync = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, phoneNumber, name } = req.body;
+
+    if (!email && !phoneNumber) {
+      res.status(400).json({ success: false, message: 'Имэйл эсвэл утасны дугаар шаардлагатай' });
+      return;
+    }
+
+    const normalizedEmail = email ? email.trim().toLowerCase() : '';
+    const cleanPhoneNumber = phoneNumber ? phoneNumber.trim().replace(/\s|-/g, '') : '';
+    const trimmedName = name ? name.trim() : '';
+
+    // Try to find existing user by email or phone number
+    let user = null;
+
+    if (normalizedEmail) {
+      user = await User.findOne({ email: normalizedEmail });
+    }
+    
+    if (!user && cleanPhoneNumber) {
+      user = await User.findOne({ phoneNumber: cleanPhoneNumber });
+    }
+
+    if (user) {
+      // Update existing user info if needed
+      let needsUpdate = false;
+      
+      if (normalizedEmail && user.email !== normalizedEmail) {
+        user.email = normalizedEmail;
+        needsUpdate = true;
+      }
+      if (cleanPhoneNumber && user.phoneNumber !== cleanPhoneNumber) {
+        user.phoneNumber = cleanPhoneNumber;
+        needsUpdate = true;
+      }
+      if (trimmedName && !user.name) {
+        user.name = trimmedName;
+        needsUpdate = true;
+      }
+      if (!user.isEmailVerified) {
+        user.isEmailVerified = true;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        await user.save();
+      }
+    } else {
+      // Create new user
+      const isFirstAdmin = normalizedEmail === 'n.munkhpurev@gmail.com' || normalizedEmail === 'admin@example.com';
+      
+      user = new User({
+        phoneNumber: cleanPhoneNumber || 'not-set',
+        email: normalizedEmail || 'not-set@example.com',
+        name: trimmedName || 'Хэрэглэгч',
+        password: 'clerk-managed',
+        role: isFirstAdmin ? 'admin' : 'user',
+        isEmailVerified: true,
+      });
+
+      await user.save();
+    }
+
+    // Generate our JWT token
+    const token = generateToken(user._id.toString());
+
+    res.json({
+      success: true,
+      message: 'Sync амжилттай',
+      token,
+      user: {
+        id: user._id.toString(),
+        phoneNumber: user.phoneNumber,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        address: user.address,
+      },
+    });
+  } catch (error: any) {
+    console.error('Clerk sync error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Sync алдаа гарлаа',
     });
   }
 };

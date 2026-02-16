@@ -54,8 +54,8 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
       .sort({ createdAt: -1 })
       .lean();
     
-    // Set cache headers
-    res.setHeader('Cache-Control', 'private, max-age=30');
+    // No cache for admin data - must always be fresh
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.json({ success: true, users });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
