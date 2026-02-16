@@ -122,36 +122,10 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
     if (!receiptRef.current || typeof window === 'undefined') return;
 
     try {
-      // Use Function constructor to create a truly dynamic import
-      // This prevents Next.js from analyzing the import at build time
-      const dynamicImport = (moduleName: string) => {
-        // @ts-ignore - Dynamic import that may not exist
-        return new Function('return import("' + moduleName + '")')();
-      };
-
-      let html2canvas: any;
-      let jsPDF: any;
-
-      try {
-        const h2c = await dynamicImport('html2canvas');
-        html2canvas = h2c.default;
-      } catch (e) {
-        console.error('html2canvas not found:', e);
-      }
-
-      try {
-        const jspdf = await dynamicImport('jspdf');
-        jsPDF = jspdf.default;
-      } catch (e) {
-        console.error('jspdf not found:', e);
-      }
-
-      if (!html2canvas || !jsPDF) {
-        alert('PDF функц ашиглахын тулд эхлээд дараах командыг ажиллуулна уу:\n\ncd fd\nyarn add html2canvas jspdf\n\nyarn dev');
-        // Fallback to print
-        handlePrint();
-        return;
-      }
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
 
       const canvas = await html2canvas(receiptRef.current, {
         scale: 2,
@@ -180,7 +154,6 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
       pdf.save(`Захиалгын_баримт_${order.orderCode || order._id}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
-      // Fallback to print if PDF generation fails
       handlePrint();
     }
   };
