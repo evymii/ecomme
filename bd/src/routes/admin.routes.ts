@@ -4,7 +4,9 @@ import {
   checkAdminAuth,
   getDashboardStats, 
   getAllUsers, 
-  updateUserRole, 
+  updateUserRole,
+  deleteUser,
+  changeUserPassword,
   getAllProducts, 
   createProduct, 
   updateProduct, 
@@ -29,6 +31,8 @@ router.get('/dashboard', getDashboardStats);
 // Users
 router.get('/users', getAllUsers);
 router.put('/users/:id/role', updateUserRole);
+router.put('/users/:id/password', changeUserPassword);
+router.delete('/users/:id', deleteUser);
 
 // Categories
 router.get('/categories', getAllCategories);

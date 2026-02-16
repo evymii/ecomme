@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import bcrypt from 'bcrypt';
 import { AuthRequest } from '../middleware/auth.js';
 import User from '../models/User.model.js';
 import Product from '../models/Product.model.js';
@@ -85,6 +86,68 @@ export const updateUserRole = async (req: Request, res: Response): Promise<void>
       success: true,
       message: 'Хэрэглэгчийн эрх амжилттай шинэчлэгдлээ',
       user
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const deleteUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Prevent admin from deleting themselves
+    if (id === req.userId) {
+      res.status(400).json({ success: false, message: 'Та өөрийгөө устгах боломжгүй' });
+      return;
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      res.status(404).json({ success: false, message: 'Хэрэглэгч олдсонгүй' });
+      return;
+    }
+
+    await User.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: 'Хэрэглэгч амжилттай устгалаа',
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const changeUserPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!password) {
+      res.status(400).json({ success: false, message: 'Нууц үг оруулна уу' });
+      return;
+    }
+
+    // Validate: 4-digit numeric PIN
+    if (password.length !== 4 || !/^\d{4}$/.test(password)) {
+      res.status(400).json({ success: false, message: 'Нууц үг 4 оронтой тоо байх ёстой' });
+      return;
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      res.status(404).json({ success: false, message: 'Хэрэглэгч олдсонгүй' });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Нууц үг амжилттай солигдлоо',
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
