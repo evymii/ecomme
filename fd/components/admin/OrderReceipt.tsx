@@ -282,28 +282,28 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
             </tr>
           </thead>
           <tbody>
-            {order.items.map((item, index) => (
+            {(order.items || []).map((item, index) => (
               <tr key={index}>
                 <td style={{ border: '1px solid #000', padding: '5px', textAlign: 'center', fontSize: '10px' }}>{index + 1}</td>
-                <td style={{ border: '1px solid #000', padding: '5px', fontSize: '10px' }}>{item.product.name}</td>
+                <td style={{ border: '1px solid #000', padding: '5px', fontSize: '10px' }}>{item.product?.name || 'Устгагдсан бараа'}</td>
                 <td style={{ border: '1px solid #000', padding: '5px', textAlign: 'center', fontSize: '10px' }}>
-                  {item.product.code || '-'}
+                  {item.product?.code || '-'}
                 </td>
                 <td style={{ border: '1px solid #000', padding: '5px', textAlign: 'center', fontSize: '10px' }}>ш</td>
                 <td style={{ border: '1px solid #000', padding: '5px', textAlign: 'center', fontSize: '10px' }}>{item.quantity}</td>
                 <td style={{ border: '1px solid #000', padding: '5px', textAlign: 'right', fontSize: '10px' }}>
-                  ₮{item.price.toLocaleString()}
+                  ₮{(item.price || 0).toLocaleString()}
                 </td>
                 <td style={{ border: '1px solid #000', padding: '5px', textAlign: 'right', fontSize: '10px' }}>
-                  ₮{(item.price * item.quantity).toLocaleString()}
+                  ₮{((item.price || 0) * (item.quantity || 0)).toLocaleString()}
                 </td>
               </tr>
             ))}
             {/* Fill remaining rows up to 20 */}
-            {Array.from({ length: Math.max(0, 20 - order.items.length) }).map((_, index) => (
+            {Array.from({ length: Math.max(0, 20 - (order.items || []).length) }).map((_, index) => (
               <tr key={`empty-${index}`}>
                 <td style={{ border: '1px solid #000', padding: '5px', textAlign: 'center', fontSize: '10px' }}>
-                  {order.items.length + index + 1}
+                  {(order.items || []).length + index + 1}
                 </td>
                 <td style={{ border: '1px solid #000', padding: '5px', fontSize: '10px' }}></td>
                 <td style={{ border: '1px solid #000', padding: '5px', fontSize: '10px' }}></td>
@@ -321,7 +321,7 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
               <td style={{ border: '1px solid #000', padding: '6px', fontSize: '10px' }}></td>
               <td style={{ border: '1px solid #000', padding: '6px', fontSize: '10px' }}></td>
               <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', fontSize: '11px', fontWeight: 'bold' }}>
-                ₮{order.total.toLocaleString()}
+                ₮{(order.total || 0).toLocaleString()}
               </td>
             </tr>
           </tbody>

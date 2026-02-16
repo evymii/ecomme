@@ -255,12 +255,12 @@ export default function AdminOrdersPage() {
                           </td>
                           <td className="py-2 px-2 md:py-3 md:px-4">
                             <div className="space-y-1">
-                              {order.items.slice(0, 2).map((item, idx) => (
+                              {(order.items || []).slice(0, 2).map((item, idx) => (
                                 <div key={idx} className="text-xs">
-                                  {item.product.name} × {item.quantity}
+                                  {item.product?.name || 'Устгагдсан бараа'} × {item.quantity}
                                 </div>
                               ))}
-                              {order.items.length > 2 && (
+                              {(order.items || []).length > 2 && (
                                 <div className="text-xs text-gray-500">
                                   +{order.items.length - 2} бараа
                                 </div>
@@ -268,7 +268,7 @@ export default function AdminOrdersPage() {
                             </div>
                           </td>
                           <td className="py-2 px-2 md:py-3 md:px-4 font-semibold">
-                            ₮{order.total.toLocaleString()}
+                            ₮{(order.total || 0).toLocaleString()}
                           </td>
                           <td className="py-2 px-2 md:py-3 md:px-4">
                             <Select
@@ -403,8 +403,9 @@ export default function AdminOrdersPage() {
                 <div className="border-t pt-4">
                   <h3 className="font-semibold mb-3">Захиалгын бараанууд</h3>
                   <div className="space-y-3">
-                    {selectedOrder.items.map((item, idx) => {
-                      const mainImg = item.product.images?.find(img => img.isMain) || item.product.images?.[0];
+                    {(selectedOrder.items || []).map((item, idx) => {
+                      const product = item.product;
+                      const mainImg = product?.images?.find(img => img.isMain) || product?.images?.[0];
                       return (
                         <div key={idx} className="flex items-center gap-3 pb-3 border-b last:border-0">
                           {/* Product Image */}
@@ -412,7 +413,7 @@ export default function AdminOrdersPage() {
                             {mainImg ? (
                               <Image
                                 src={getImageUrl(mainImg.url)}
-                                alt={item.product.name}
+                                alt={product?.name || 'Бараа'}
                                 fill
                                 className="object-cover"
                                 unoptimized
@@ -426,9 +427,9 @@ export default function AdminOrdersPage() {
                           </div>
                           {/* Product Info */}
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{item.product.name}</p>
-                            {item.product.code && (
-                              <p className="text-xs text-gray-500">Код: {item.product.code}</p>
+                            <p className="font-medium text-sm truncate">{product?.name || 'Устгагдсан бараа'}</p>
+                            {product?.code && (
+                              <p className="text-xs text-gray-500">Код: {product.code}</p>
                             )}
                             <p className="text-xs text-gray-600">
                               Тоо ширхэг: {item.quantity}
@@ -437,8 +438,8 @@ export default function AdminOrdersPage() {
                           </div>
                           {/* Price */}
                           <div className="text-right flex-shrink-0">
-                            <p className="font-semibold text-sm">₮{(item.price * item.quantity).toLocaleString()}</p>
-                            <p className="text-xs text-gray-500">₮{item.price.toLocaleString()} × {item.quantity}</p>
+                            <p className="font-semibold text-sm">₮{((item.price || 0) * (item.quantity || 0)).toLocaleString()}</p>
+                            <p className="text-xs text-gray-500">₮{(item.price || 0).toLocaleString()} × {item.quantity}</p>
                           </div>
                         </div>
                       );
@@ -450,7 +451,7 @@ export default function AdminOrdersPage() {
                 <div className="border-t pt-4">
                   <div className="flex justify-between items-center">
                     <p className="text-lg font-semibold">Нийт дүн:</p>
-                    <p className="text-xl font-bold">₮{selectedOrder.total.toLocaleString()}</p>
+                    <p className="text-xl font-bold">₮{(selectedOrder.total || 0).toLocaleString()}</p>
                   </div>
                 </div>
                   </div>

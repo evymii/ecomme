@@ -172,7 +172,7 @@ export default function OrdersPage() {
                                   </div>
                                 </div>
                                 <span className="text-sm font-medium text-[#02111B] whitespace-nowrap">
-                                  ₮{(item.price * item.quantity).toLocaleString()}
+                                  ₮{((item.price || 0) * (item.quantity || 0)).toLocaleString()}
                                 </span>
                               </div>
                             );
@@ -185,7 +185,7 @@ export default function OrdersPage() {
                             {order.items.reduce((sum, i) => sum + i.quantity, 0)} бараа
                           </span>
                           <span className="text-sm font-semibold text-[#02111B]">
-                            Нийт: ₮{order.total.toLocaleString()}
+                            Нийт: ₮{(order.total || 0).toLocaleString()}
                           </span>
                         </div>
                       </CardContent>
