@@ -5,7 +5,8 @@ import { ShoppingCart, User, LogOut, Menu, X, Search, Heart } from 'lucide-react
 import { useCartStore } from '@/store/cart-store';
 import { useFavoritesStore } from '@/store/favorites-store';
 import { useAuthStore } from '@/store/auth-store';
-import AuthModal from '@/components/auth/AuthModal';
+import dynamic from 'next/dynamic';
+const AuthModal = dynamic(() => import('@/components/auth/AuthModal'), { ssr: false });
 import CartSidebar from '@/components/cart/CartSidebar';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';

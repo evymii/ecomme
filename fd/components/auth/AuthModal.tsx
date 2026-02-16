@@ -1,17 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-
-// Safe wrapper for Clerk's useSignUp - won't crash if ClerkProvider is missing
-function useSafeSignUp() {
-  try {
-    // Dynamic require to avoid build-time crashes
-    const clerk = require('@clerk/nextjs');
-    return clerk.useSignUp();
-  } catch {
-    return { signUp: null, isLoaded: false };
-  }
-}
+import { useSignUp } from '@clerk/nextjs';
 import {
   Dialog,
   DialogContent,
@@ -52,7 +42,7 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const { toast } = useToast();
   
   // Clerk hook — only used for email verification during signup
-  const { signUp: clerkSignUp, isLoaded: signUpLoaded } = useSafeSignUp();
+  const { signUp: clerkSignUp, isLoaded: signUpLoaded } = useSignUp();
 
   const resetForm = () => {
     setPhoneNumber('');
