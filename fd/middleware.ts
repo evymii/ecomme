@@ -1,10 +1,7 @@
-import { clerkMiddleware } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Use Clerk middleware for Clerk-related routes (sign-up verification)
-// and custom logic for admin route protection
-export default clerkMiddleware(async (auth, req: NextRequest) => {
+export default function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Protect /admin routes with our cookie-based check
@@ -18,13 +15,11 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and static files
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
+    // Only run middleware on admin routes
+    '/admin/:path*',
   ],
 };
