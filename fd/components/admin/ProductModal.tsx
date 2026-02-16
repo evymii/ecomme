@@ -263,6 +263,8 @@ export default function ProductModal({
               <Label htmlFor="code">Барааны код *</Label>
               <Input
                 id="code"
+                name="code"
+                autoComplete="off"
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                 required
@@ -271,11 +273,12 @@ export default function ProductModal({
             </div>
 
             <div>
-              <Label>Ангилал *</Label>
+              <Label htmlFor="category">Ангилал *</Label>
               <Select
                 value={formData.category}
                 onValueChange={(value) => setFormData({ ...formData, category: value })}
                 required
+                name="category"
               >
                 <SelectTrigger id="category">
                   <SelectValue placeholder="Ангилал сонгох" />
@@ -294,6 +297,8 @@ export default function ProductModal({
               <Label htmlFor="name">Барааны нэр *</Label>
               <Input
                 id="name"
+                name="productName"
+                autoComplete="off"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
@@ -305,6 +310,8 @@ export default function ProductModal({
               <Label htmlFor="stock">Нөөц *</Label>
               <Input
                 id="stock"
+                name="stock"
+                autoComplete="off"
                 type="number"
                 value={formData.stock}
                 onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
@@ -317,6 +324,8 @@ export default function ProductModal({
               <Label htmlFor="description">Тайлбар *</Label>
               <textarea
                 id="description"
+                name="description"
+                autoComplete="off"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 required
@@ -330,6 +339,8 @@ export default function ProductModal({
               <Label htmlFor="price">Үнэ *</Label>
               <Input
                 id="price"
+                name="price"
+                autoComplete="off"
                 type="number"
                 value={formData.price}
                 onChange={(e) => setFormData({ ...formData, price: e.target.value })}
@@ -421,8 +432,10 @@ export default function ProductModal({
           <div>
             <Label>Онцлог</Label>
             <div className="space-y-2">
-              <label className="flex items-center gap-2">
+              <label htmlFor="feature-isNew" className="flex items-center gap-2">
                 <input
+                  id="feature-isNew"
+                  name="feature-isNew"
                   type="checkbox"
                   checked={formData.features.isNew}
                   onChange={(e) =>
@@ -435,8 +448,10 @@ export default function ProductModal({
                 />
                 <span>Шинэ бараа</span>
               </label>
-              <label className="flex items-center gap-2">
+              <label htmlFor="feature-isFeatured" className="flex items-center gap-2">
                 <input
+                  id="feature-isFeatured"
+                  name="feature-isFeatured"
                   type="checkbox"
                   checked={formData.features.isFeatured}
                   onChange={(e) =>
@@ -449,8 +464,10 @@ export default function ProductModal({
                 />
                 <span>Онцлох бараа</span>
               </label>
-              <label className="flex items-center gap-2">
+              <label htmlFor="feature-isDiscounted" className="flex items-center gap-2">
                 <input
+                  id="feature-isDiscounted"
+                  name="feature-isDiscounted"
                   type="checkbox"
                   checked={formData.features.isDiscounted}
                   onChange={(e) =>
