@@ -476,7 +476,7 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
     const orders = await Order.find(query)
       .select('orderCode items total status createdAt phoneNumber email customerName user')
       .populate('user', 'name phoneNumber email')
-      .populate('items.product', 'name price images')
+      .populate('items.product', 'name price code')
       .sort({ createdAt: -1 })
       .limit(500) // Limit orders to prevent huge responses
       .lean();
