@@ -16,6 +16,18 @@ import Loader from '@/components/ui/Loader';
 
 type PaymentMethod = 'pay_later' | 'paid_personally' | 'bank_transfer';
 
+interface UserOrderForVerification {
+  _id: string;
+  orderCode?: string;
+  total: number;
+  createdAt: string;
+  items: Array<{
+    product: string | { _id?: string };
+    quantity: number;
+    size?: string;
+  }>;
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const items = useCartStore((  state) => state.items);
@@ -36,6 +48,56 @@ export default function CheckoutPage() {
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderCode, setOrderCode] = useState('');
   const [orderId, setOrderId] = useState('');
+
+  const buildItemSignature = (orderItems: Array<{ productId: string; quantity: number; size?: string }>) => {
+    return orderItems
+      .map((item) => `${item.productId}:${item.quantity}:${item.size || ''}`)
+      .sort()
+      .join('|');
+  };
+
+  const getOrderItemProductId = (product: string | { _id?: string }) => {
+    if (typeof product === 'string') return product;
+    return product?._id || '';
+  };
+
+  const verifyOrderAfterTimeout = async (expectedOrderData: {
+    items: Array<{ productId: string; quantity: number; size?: string }>;
+    total: number;
+  }) => {
+    if (!user) return null;
+
+    try {
+      const verifyResponse = await api.get('/orders/user', { timeout: 10000 });
+      if (!verifyResponse.data?.success || !Array.isArray(verifyResponse.data.orders)) {
+        return null;
+      }
+
+      const expectedSignature = buildItemSignature(expectedOrderData.items);
+      const now = Date.now();
+
+      const matchingOrder = (verifyResponse.data.orders as UserOrderForVerification[]).find((order) => {
+        const createdAt = new Date(order.createdAt).getTime();
+        const isRecent = Number.isFinite(createdAt) && now - createdAt <= 10 * 60 * 1000;
+        if (!isRecent) return false;
+        if (order.total !== expectedOrderData.total) return false;
+
+        const orderSignature = buildItemSignature(
+          (order.items || []).map((item) => ({
+            productId: getOrderItemProductId(item.product),
+            quantity: item.quantity,
+            size: item.size,
+          }))
+        );
+
+        return orderSignature === expectedSignature;
+      });
+
+      return matchingOrder || null;
+    } catch (verifyError) {
+      return null;
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -109,9 +171,9 @@ export default function CheckoutPage() {
 
       console.log('Submitting order:', orderData);
 
-      // Use longer timeout for order creation (15 seconds)
+      // Use longer timeout to reduce false client-side timeout errors
       const response = await api.post('/orders', orderData, {
-        timeout: 15000, // 15 seconds for order creation with transactions
+        timeout: 30000,
       });
 
       console.log('Order response:', response.data);
@@ -153,7 +215,34 @@ export default function CheckoutPage() {
       let errorMessage = 'Захиалга үүсгэхэд алдаа гарлаа';
       
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        errorMessage = 'Холболт удаан байна. Дахин оролдоно уу.';
+        const expectedOrderItems = items.map(item => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          size: item.size || undefined
+        }));
+        const matchedOrder = await verifyOrderAfterTimeout({
+          items: expectedOrderItems,
+          total,
+        });
+
+        if (matchedOrder) {
+          const code = matchedOrder.orderCode || '-';
+          const orderIdValue = matchedOrder._id?.toString() || '';
+
+          setOrderCode(code);
+          setOrderId(orderIdValue);
+          setOrderSuccess(true);
+          clearCart();
+
+          toast({
+            title: 'Амжилттай',
+            description: `Захиалга баталгаажлаа. Захиалгын код: ${code}`,
+            duration: 5000,
+          });
+          return;
+        }
+
+        errorMessage = 'Холболт удаан байна. Түр хүлээгээд захиалгын түүхээ шалгана уу.';
       } else if (error.response?.status === 504) {
         errorMessage = 'Сервертэй холбогдоход хэт удаан байна. Дахин оролдоно уу.';
       } else if (error.response?.data?.message) {

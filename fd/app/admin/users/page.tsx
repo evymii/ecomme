@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Header from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import Loader from '@/components/ui/Loader';
 import { PageLoader } from '@/components/ui/Loader';
 import { Trash2, KeyRound } from 'lucide-react';
+import { useDelayedLoading } from '@/hooks/useDelayedLoading';
 
 interface User {
   _id: string;
@@ -27,6 +28,7 @@ interface User {
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const showLoader = useDelayedLoading(loading, 250);
   const { isAdmin, isChecking } = useAdminAuth();
   const { toast } = useToast();
 
@@ -36,23 +38,35 @@ export default function AdminUsersPage() {
   const [newPassword, setNewPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const response = await api.get('/admin/users');
+      if (!response.data?.success) {
+        toast({
+          title: 'Алдаа',
+          description: response.data?.message || 'Хэрэглэгчид авахад алдаа гарлаа',
+          variant: 'destructive',
+        });
+        return;
+      }
       setUsers(response.data.users || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching users:', error);
+      toast({
+        title: 'Алдаа',
+        description: error.response?.data?.message || 'Хэрэглэгчид авахад алдаа гарлаа',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     if (isAdmin && !isChecking) {
       fetchUsers();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  }, [isAdmin, isChecking, fetchUsers]);
 
   const handleRoleChange = async (userId: string, currentRole: string, newRole: 'admin' | 'user') => {
     if (currentRole === newRole) return;
@@ -167,9 +181,9 @@ export default function AdminUsersPage() {
           )}
         </div>
 
-        {loading ? (
+        {loading && showLoader ? (
           <PageLoader />
-        ) : (
+        ) : loading ? null : (
           <Card>
             <CardHeader className="p-3 md:p-6">
               <CardTitle className="text-base md:text-lg font-semibold md:font-bold">Хэрэглэгчид</CardTitle>

@@ -46,6 +46,7 @@ export default function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchProduct[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -70,9 +71,12 @@ export default function Header() {
             useAuthStore.getState().setToken(token);
           }
         })
-        .catch(() => {
+        .catch((error: any) => {
           if (isMounted) {
-            localStorage.removeItem('token');
+            // Clear token only when backend confirms token is invalid.
+            if (error.response?.status === 401 || error.response?.status === 403) {
+              localStorage.removeItem('token');
+            }
           }
         });
       
@@ -88,11 +92,13 @@ export default function Header() {
     if (!searchQuery.trim()) {
       setSearchResults([]);
       setSearchLoading(false);
+      setSearchError(false);
       return;
     }
 
     const abortController = new AbortController();
     setSearchLoading(true);
+    setSearchError(false);
 
     const timer = setTimeout(async () => {
       try {
@@ -101,11 +107,13 @@ export default function Header() {
         });
         if (!abortController.signal.aborted) {
           setSearchResults(response.data.products || []);
+          setSearchError(false);
         }
       } catch (error: any) {
         if (!abortController.signal.aborted) {
           console.error('Search error:', error);
           setSearchResults([]);
+          setSearchError(true);
         }
       } finally {
         if (!abortController.signal.aborted) {
@@ -160,6 +168,10 @@ export default function Header() {
     <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-[#02111B]/10 max-h-[70vh] overflow-y-auto z-50">
       {searchLoading ? (
         <div className="p-5 text-center text-[#5D737E] text-sm font-light">Хайж байна...</div>
+      ) : searchError ? (
+        <div className="p-5 text-center text-red-500 text-sm font-light">
+          Хайлт хийхэд алдаа гарлаа. Дахин оролдоно уу.
+        </div>
       ) : searchResults.length > 0 ? (
         <div className="divide-y divide-[#02111B]/5 py-1">
           {searchResults.map((product) => {

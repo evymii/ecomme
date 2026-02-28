@@ -9,6 +9,7 @@ import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/utils';
 import { PageLoader } from '@/components/ui/Loader';
+import { useDelayedLoading } from '@/hooks/useDelayedLoading';
 
 interface Product {
   _id: string;
@@ -35,6 +36,7 @@ function ProductsContent() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const showLoader = useDelayedLoading(loading, 250);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -139,9 +141,9 @@ function ProductsContent() {
       </div>
 
       {/* Products Grid */}
-      {loading ? (
+      {loading && showLoader ? (
         <PageLoader />
-      ) : products.length === 0 ? (
+      ) : loading ? null : products.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-[#5D737E] font-light">Бараа олдсонгүй</p>
         </div>

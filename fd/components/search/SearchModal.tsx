@@ -32,23 +32,28 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const router = useRouter();
 
   // Debounced search
   useEffect(() => {
     if (!query.trim()) {
       setResults([]);
+      setSearchError(false);
       return;
     }
 
     const timer = setTimeout(async () => {
       setLoading(true);
+      setSearchError(false);
       try {
         const response = await api.get(`/products/search?q=${encodeURIComponent(query)}`);
         setResults(response.data.products || []);
+        setSearchError(false);
       } catch (error) {
         console.error('Search error:', error);
         setResults([]);
+        setSearchError(true);
       } finally {
         setLoading(false);
       }
@@ -104,6 +109,10 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
           {loading ? (
             <div className="p-6 text-center text-gray-500 text-sm">
               Хайж байна...
+            </div>
+          ) : searchError ? (
+            <div className="p-6 text-center text-red-500 text-sm">
+              Хайлт хийхэд алдаа гарлаа. Дахин оролдоно уу.
             </div>
           ) : results.length > 0 ? (
             <div className="divide-y">

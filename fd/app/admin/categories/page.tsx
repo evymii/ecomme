@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Header from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Edit, Trash2 } from 'lucide-react';
 import Loader from '@/components/ui/Loader';
 import { PageLoader } from '@/components/ui/Loader';
+import { useDelayedLoading } from '@/hooks/useDelayedLoading';
 
 interface Category {
   _id: string;
@@ -23,29 +24,41 @@ interface Category {
 export default function AdminCategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const showLoader = useDelayedLoading(loading, 250);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const { isAdmin, isChecking } = useAdminAuth();
   const { toast } = useToast();
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const response = await api.get('/admin/categories');
+      if (!response.data?.success) {
+        toast({
+          title: 'Алдаа',
+          description: response.data?.message || 'Ангиллууд авахад алдаа гарлаа',
+          variant: 'destructive',
+        });
+        return;
+      }
       setCategories(response.data.categories || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching categories:', error);
+      toast({
+        title: 'Алдаа',
+        description: error.response?.data?.message || 'Ангиллууд авахад алдаа гарлаа',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
-    // Only fetch once when admin is confirmed
     if (isAdmin && !isChecking) {
       fetchCategories();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]); // Only depend on isAdmin, not isChecking
+  }, [isAdmin, isChecking, fetchCategories]);
 
   const handleEdit = (category: Category) => {
     setEditingCategory(category);
@@ -103,9 +116,9 @@ export default function AdminCategoriesPage() {
           </Button>
         </div>
 
-        {loading ? (
+        {loading && showLoader ? (
           <PageLoader />
-        ) : (
+        ) : loading ? null : (
           <Card>
             <CardHeader className="p-3 md:p-6">
               <CardTitle className="text-base md:text-lg font-semibold md:font-bold">Ангиллууд ({categories.length})</CardTitle>

@@ -14,6 +14,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { getImageUrl } from '@/lib/image-utils';
 import { PageLoader } from '@/components/ui/Loader';
 import api from '@/lib/api';
+import { useDelayedLoading } from '@/hooks/useDelayedLoading';
 
 interface OrderProduct {
   _id: string;
@@ -53,6 +54,7 @@ export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const showLoader = useDelayedLoading(loading, 250);
 
   const userRole = user?.role;
   const userId = user ? 'exists' : null;
@@ -96,9 +98,9 @@ export default function OrdersPage() {
           <div className="flex-1">
             <h1 className="text-xl md:text-2xl font-semibold mb-4 md:mb-6">Миний захиалгууд</h1>
 
-            {loading ? (
+            {loading && showLoader ? (
               <PageLoader />
-            ) : orders.length === 0 ? (
+            ) : loading ? null : orders.length === 0 ? (
               <Card>
                 <CardContent className="p-4 md:p-12">
                   <div className="flex flex-col items-center justify-center py-8 md:py-12">

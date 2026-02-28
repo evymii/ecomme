@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Header from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,11 +8,13 @@ import { Input } from '@/components/ui/input';
 import ProductModal from '@/components/admin/ProductModal';
 import api from '@/lib/api';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
+import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
 import { getImageUrl } from '@/lib/image-utils';
 import { Search, X } from 'lucide-react';
 import Loader from '@/components/ui/Loader';
 import { PageLoader } from '@/components/ui/Loader';
+import { useDelayedLoading } from '@/hooks/useDelayedLoading';
 
 interface ProductImage {
   url: string;
@@ -39,10 +41,12 @@ interface Product {
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const showLoader = useDelayedLoading(loading, 250);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const { isAdmin, isChecking } = useAdminAuth();
+  const { toast } = useToast();
 
   // Filter products based on search query
   const filteredProducts = products.filter(product => {
@@ -54,9 +58,17 @@ export default function AdminProductsPage() {
     );
   });
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       const response = await api.get('/admin/products');
+      if (!response.data?.success) {
+        toast({
+          title: 'Алдаа',
+          description: response.data?.message || 'Бараанууд авахад алдаа гарлаа',
+          variant: 'destructive',
+        });
+        return;
+      }
       // Normalize products to ensure images have order property
       const normalizedProducts = (response.data.products || []).map((product: any) => ({
         ...product,
@@ -67,20 +79,23 @@ export default function AdminProductsPage() {
         })),
       }));
       setProducts(normalizedProducts);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching products:', error);
+      toast({
+        title: 'Алдаа',
+        description: error.response?.data?.message || 'Бараанууд авахад алдаа гарлаа',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
-    // Only fetch once when admin is confirmed and not checking
     if (isAdmin && !isChecking) {
       fetchProducts();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]); // Only depend on isAdmin, not isChecking
+  }, [isAdmin, isChecking, fetchProducts]);
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
@@ -92,8 +107,13 @@ export default function AdminProductsPage() {
     try {
       await api.delete(`/admin/products/${id}`);
       fetchProducts();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting product:', error);
+      toast({
+        title: 'Алдаа',
+        description: error.response?.data?.message || 'Бараа устгахад алдаа гарлаа',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -152,9 +172,9 @@ export default function AdminProductsPage() {
           </div>
         </div>
 
-        {loading ? (
+        {loading && showLoader ? (
           <PageLoader />
-        ) : (
+        ) : loading ? null : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-6">
             {filteredProducts.map((product) => {
               const mainImage = product.images.find(img => img.isMain) || product.images[0];

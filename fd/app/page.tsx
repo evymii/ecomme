@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronRight, Zap, Shield, Package } from 'lucide-react';
+import { useDelayedLoading } from '@/hooks/useDelayedLoading';
 
 interface Product {
   _id: string;
@@ -39,7 +40,7 @@ export default function HomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('Бүгд');
   const [loading, setLoading] = useState(true);
-  const [initialLoad, setInitialLoad] = useState(true);
+  const showLoader = useDelayedLoading(loading, 300);
   const user = useAuthStore((state) => state.user);
   const router = useRouter();
 
@@ -71,8 +72,6 @@ export default function HomePage() {
         console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
-        // Small delay for loader animation
-        setTimeout(() => setInitialLoad(false), 800);
       }
     };
 
@@ -113,7 +112,7 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, [categories.length]);
 
-  if (initialLoad && loading) {
+  if (loading && showLoader) {
     return <Loader />;
   }
 
@@ -262,12 +261,12 @@ export default function HomePage() {
                 <ProductCard key={product._id} product={product} />
               ))}
             </div>
-          ) : !loading ? (
+          ) : loading ? (
+            showLoader ? <PageLoader /> : null
+          ) : (
             <div className="text-center py-16">
               <p className="text-[#5D737E] font-light">Бараа олдсонгүй</p>
             </div>
-          ) : (
-            <PageLoader />
           )}
         </div>
       </section>

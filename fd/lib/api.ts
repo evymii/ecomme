@@ -1,8 +1,13 @@
 import axios from 'axios';
 
-// Get API URL from environment variable or default to localhost
-// In production, NEXT_PUBLIC_API_URL should be set in Vercel environment variables
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+
+if (!rawApiUrl && process.env.NODE_ENV === 'production') {
+  throw new Error('NEXT_PUBLIC_API_URL is required in production');
+}
+
+// Use localhost only for local development when env is not set
+const API_URL = rawApiUrl || 'http://localhost:5001/api';
 
 // Normalize API URL - ensure it ends with /api (without double /api or trailing slashes)
 let normalizedApiUrl = API_URL.trim().replace(/\/+$/, ''); // Remove trailing slashes
@@ -18,8 +23,11 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
 const api = axios.create({
   baseURL: normalizedApiUrl,
   withCredentials: true,
-  timeout: 5000, // 5 second timeout for faster responses
+  timeout: 12000, // Default timeout with buffer for cold starts
 });
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const RETRYABLE_STATUS = [408, 425, 429, 500, 502, 503, 504];
 
 // Add auth token to requests and handle Content-Type
 api.interceptors.request.use((config) => {
@@ -43,7 +51,23 @@ api.interceptors.request.use((config) => {
 // Handle response errors
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const config = error?.config as any;
+    const method = (config?.method || 'get').toLowerCase();
+    const retryCount = config?._retryCount || 0;
+    const status = error?.response?.status;
+    const isTimeout = error?.code === 'ECONNABORTED' || error?.message?.includes('timeout');
+    const isNetworkError = !error?.response;
+    const shouldRetryMethod = ['get', 'head', 'options'].includes(method);
+    const shouldRetryStatus = status && RETRYABLE_STATUS.includes(status);
+
+    if (config && shouldRetryMethod && retryCount < 2 && (isTimeout || isNetworkError || shouldRetryStatus)) {
+      config._retryCount = retryCount + 1;
+      const retryDelay = 400 * Math.pow(2, retryCount); // 400ms, 800ms
+      await sleep(retryDelay);
+      return api(config);
+    }
+
     // Don't automatically clear tokens on 401 errors
     // Let individual components/hooks handle auth errors
     // This prevents clearing tokens on temporary network issues or admin pages

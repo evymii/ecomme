@@ -40,6 +40,17 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
   
   const { setUser, setToken, user } = useAuthStore();
   const { toast } = useToast();
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const warmUpBackend = async () => {
+    try {
+      await api.get('/health', { timeout: 7000 });
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  };
   
   // Clerk hook — only used for email verification during signup
   const { signUp: clerkSignUp, isLoaded: signUpLoaded } = useSignUp();
@@ -271,10 +282,31 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
     setLoading(true);
     try {
-      const response = await api.post('/auth/signin', {
+      const signInPayload = {
         phoneNumber: phoneNumber.trim(),
         password,
-      });
+      };
+
+      const isWarm = await warmUpBackend();
+      if (!isWarm) {
+        toast({
+          title: 'Анхааруулга',
+          description: 'Сервер сэрж байна. Нэвтрэхийг дахин оролдож байна...',
+        });
+      }
+
+      let response;
+      try {
+        response = await api.post('/auth/signin', signInPayload, { timeout: 20000 });
+      } catch (firstError: any) {
+        // Retry once on timeout to handle cold backend starts
+        if (firstError.code === 'ECONNABORTED' || firstError.message?.includes('timeout')) {
+          await sleep(1500);
+          response = await api.post('/auth/signin', signInPayload, { timeout: 20000 });
+        } else {
+          throw firstError;
+        }
+      }
 
       if (response.data && response.data.success) {
         setToken(response.data.token);
@@ -297,9 +329,12 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
       }
     } catch (error: any) {
       console.error('Sign in error:', error);
-      const errorMessage = error.response?.data?.message || 
-                          error.message || 
-                          (error.code === 'ECONNREFUSED' ? 'Backend сервер ажиллахгүй байна.' : 'Нэвтрэхэд алдаа гарлаа');
+      const errorMessage =
+        error.code === 'ECONNABORTED' || error.message?.includes('timeout')
+          ? 'Сервер хариулахад удаан байна. 20-30 секунд хүлээгээд дахин оролдоно уу.'
+          : error.response?.data?.message ||
+            error.message ||
+            (error.code === 'ECONNREFUSED' ? 'Backend сервер ажиллахгүй байна.' : 'Нэвтрэхэд алдаа гарлаа');
       toast({ title: 'Алдаа', description: errorMessage, variant: 'destructive' });
     } finally {
       setLoading(false);

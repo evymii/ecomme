@@ -81,6 +81,11 @@ export default function ProductModal({
         setCategories(response.data.categories || []);
       } catch (error) {
         console.error('Error fetching categories:', error);
+        toast({
+          title: 'Алдаа',
+          description: 'Ангиллууд ачаалахад алдаа гарлаа',
+          variant: 'destructive',
+        });
       }
     };
     fetchCategories();
@@ -115,32 +120,35 @@ export default function ProductModal({
       setImages([]);
       setMainImageIndex(0);
     }
-  }, [product, open]);
+  }, [product, open, toast]);
 
-  const handleFileSelect = (files: FileList | null) => {
+  const handleFileSelect = useCallback((files: FileList | null) => {
     if (!files) return;
-    const newImages: ProductImage[] = [];
-    const remainingSlots = 10 - images.length;
 
-    Array.from(files).slice(0, remainingSlots).forEach((file) => {
-      if (file.type.startsWith('image/')) {
-        const url = URL.createObjectURL(file);
-        newImages.push({
-          url,
-          isMain: false,
-          order: images.length + newImages.length,
-          file,
-        });
-      }
+    setImages((prevImages) => {
+      const newImages: ProductImage[] = [];
+      const remainingSlots = 10 - prevImages.length;
+
+      Array.from(files).slice(0, remainingSlots).forEach((file) => {
+        if (file.type.startsWith('image/')) {
+          const url = URL.createObjectURL(file);
+          newImages.push({
+            url,
+            isMain: false,
+            order: prevImages.length + newImages.length,
+            file,
+          });
+        }
+      });
+
+      return [...prevImages, ...newImages];
     });
-
-    setImages([...images, ...newImages]);
-  };
+  }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     handleFileSelect(e.dataTransfer.files);
-  }, [images]);
+  }, [handleFileSelect]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -384,21 +392,13 @@ export default function ProductModal({
                   {images.map((img, index) => (
                     <div key={index} className="relative group">
                       <div className="relative aspect-square rounded overflow-hidden border-2 border-gray-200">
-                        {img.url.startsWith('blob:') ? (
-                          <img
-                            src={img.url}
-                            alt={`Image ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <Image
-                            src={getImageUrl(img.url)}
-                            alt={`Image ${index + 1}`}
-                            fill
-                            className="object-cover"
-                            unoptimized
-                          />
-                        )}
+                        <Image
+                          src={img.url.startsWith('blob:') ? img.url : getImageUrl(img.url)}
+                          alt={`Image ${index + 1}`}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
                         {index === mainImageIndex && (
                           <div className="absolute top-1 right-1 bg-yellow-400 rounded-full p-1">
                             <Star className="w-3 h-3 fill-yellow-400 text-yellow-600" />

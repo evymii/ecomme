@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import Sidebar from '@/components/profile/Sidebar';
 import { PageLoader } from '@/components/ui/Loader';
+import { useDelayedLoading } from '@/hooks/useDelayedLoading';
 
 const cities = ['Улаанбаатар'];
 const districts: Record<string, string[]> = {
@@ -35,6 +36,7 @@ export default function ProfilePage() {
     additionalInfo: '',
   });
   const [loading, setLoading] = useState(true);
+  const showLoader = useDelayedLoading(loading, 250);
   const [saving, setSaving] = useState(false);
   const user = useAuthStore((state) => state.user);
   const router = useRouter();
@@ -155,9 +157,9 @@ export default function ProfilePage() {
                 <CardTitle className="text-lg md:text-2xl font-semibold md:font-bold">Миний профайл</CardTitle>
               </CardHeader>
               <CardContent className="p-4 md:p-6">
-                {loading ? (
+                {loading && showLoader ? (
                   <PageLoader />
-                ) : (
+                ) : loading ? null : (
                   <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>

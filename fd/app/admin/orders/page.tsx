@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import { getImageUrl } from '@/lib/image-utils';
@@ -15,6 +15,7 @@ import api from '@/lib/api';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useToast } from '@/hooks/use-toast';
 import OrderReceipt from '@/components/admin/OrderReceipt';
+import { useDelayedLoading } from '@/hooks/useDelayedLoading';
 
 interface Order {
   _id: string;
@@ -58,6 +59,7 @@ export default function AdminOrdersPage() {
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const showLoader = useDelayedLoading(loading, 250);
   const [startDate, setStartDate] = useState(todayFormatted);
   const [endDate, setEndDate] = useState(todayFormatted);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -86,7 +88,7 @@ export default function AdminOrdersPage() {
     setDateRange(start, end);
   };
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async ({ showErrorToast = true }: { showErrorToast?: boolean } = {}) => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -97,38 +99,48 @@ export default function AdminOrdersPage() {
       
       if (response.data.success) {
         setOrders(response.data.orders || []);
+        return true;
       } else {
-        setOrders([]);
+        if (showErrorToast) {
+          toast({
+            title: 'Алдаа',
+            description: response.data?.message || 'Захиалгууд авахад алдаа гарлаа',
+            variant: 'destructive',
+          });
+        }
+        return false;
       }
     } catch (error: any) {
       console.error('Error fetching orders:', error);
-      toast({
-        title: 'Алдаа',
-        description: error.response?.data?.message || 'Захиалгууд авахад алдаа гарлаа',
-        variant: 'destructive',
-      });
-      setOrders([]);
+      if (showErrorToast) {
+        toast({
+          title: 'Алдаа',
+          description: error.response?.data?.message || 'Захиалгууд авахад алдаа гарлаа',
+          variant: 'destructive',
+        });
+      }
+      return false;
     } finally {
       setLoading(false);
     }
-  };
+  }, [startDate, endDate, toast]);
 
   useEffect(() => {
-    // Only fetch when admin is confirmed (not checking) and date filters change
     if (isAdmin && !isChecking) {
       fetchOrders();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, startDate, endDate]); // Remove isChecking from dependencies
+  }, [isAdmin, isChecking, fetchOrders]);
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
       await api.put(`/admin/orders/${orderId}/status`, { status: newStatus });
+      const refreshed = await fetchOrders({ showErrorToast: false });
       toast({
         title: 'Амжилттай',
-        description: 'Захиалгын төлөв шинэчлэгдлээ',
+        description: refreshed
+          ? 'Захиалгын төлөв шинэчлэгдлээ'
+          : 'Захиалгын төлөв шинэчлэгдсэн боловч жагсаалт шинэчлэхэд алдаа гарлаа',
       });
-      fetchOrders();
     } catch (error: any) {
       toast({
         title: 'Алдаа',
@@ -215,9 +227,9 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        {loading ? (
+        {loading && showLoader ? (
           <PageLoader />
-        ) : (
+        ) : loading ? null : (
           <Card>
             <CardHeader className="p-3 md:p-6">
               <CardTitle className="text-base md:text-lg font-semibold md:font-bold">

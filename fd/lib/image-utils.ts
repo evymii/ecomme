@@ -22,7 +22,11 @@ export function getImageUrl(url: string): string {
   
   // If it's a relative path, make it absolute
   // Backend URL without /api suffix
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+  const rawApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (!rawApiUrl && process.env.NODE_ENV === 'production') {
+    throw new Error('NEXT_PUBLIC_API_URL is required in production');
+  }
+  const apiUrl = rawApiUrl || 'http://localhost:5001/api';
   const backendUrl = apiUrl.replace(/\/api\/?$/, '') || 'http://localhost:5001';
   const cleanUrl = url.startsWith('/') ? url : '/' + url;
   return `${backendUrl}${cleanUrl}`;
