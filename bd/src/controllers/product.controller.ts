@@ -7,6 +7,7 @@ export const getAllProducts = async (req: Request, res: Response): Promise<void>
     // Optimize: use lean() for faster queries and select only needed fields
     const products = await Product.find()
       .select('name price images features stock category createdAt code')
+      .slice('images', 1)
       .sort({ createdAt: -1 })
       .limit(100) // Limit results for better performance
       .lean();
@@ -71,6 +72,7 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
     // Optimize: use lean() and select only needed fields
     const products = await Product.find({ category: categoryName })
       .select('name price images features stock category createdAt code')
+      .slice('images', 1)
       .sort({ createdAt: -1 })
       .limit(100) // Limit results
       .lean();
@@ -94,6 +96,7 @@ export const getFeaturedProducts = async (req: Request, res: Response): Promise<
       ]
     })
       .select('name price images features stock category createdAt code')
+      .slice('images', 1)
       .sort({ createdAt: -1 })
       .limit(10)
       .lean();
@@ -111,6 +114,7 @@ export const getDiscountedProducts = async (req: Request, res: Response): Promis
     // Optimize: use lean() and select only needed fields
     const products = await Product.find({ 'features.isDiscounted': true })
       .select('name price images features stock category createdAt code')
+      .slice('images', 1)
       .sort({ createdAt: -1 })
       .limit(10)
       .lean();
@@ -150,6 +154,7 @@ export const searchProducts = async (req: Request, res: Response): Promise<void>
       ]
     })
       .select('name price images features stock category createdAt code')
+      .slice('images', 1)
       .sort({ createdAt: -1 })
       .limit(20)
       .lean();

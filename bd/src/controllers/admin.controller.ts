@@ -156,8 +156,10 @@ export const changeUserPassword = async (req: Request, res: Response): Promise<v
 
 export const getAllProducts = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Optimize: use lean() for faster queries
+    // Return lightweight list data for admin grid; full product data is fetched on edit.
     const products = await Product.find()
+      .select('code name description price category stock images features createdAt')
+      .slice('images', 1)
       .sort({ createdAt: -1 })
       .lean();
     
