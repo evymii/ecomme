@@ -98,8 +98,29 @@ export default function AdminProductsPage() {
   }, [isAdmin, isChecking, fetchProducts]);
 
   const handleEdit = (product: Product) => {
-    setEditingProduct(product);
-    setModalOpen(true);
+    const openEditModal = async () => {
+      try {
+        const response = await api.get(`/products/${product._id}`);
+        const fullProduct = response.data?.product;
+        if (!response.data?.success || !fullProduct) {
+          toast({
+            title: 'Алдаа',
+            description: response.data?.message || 'Барааны дэлгэрэнгүй мэдээлэл авахад алдаа гарлаа',
+            variant: 'destructive',
+          });
+          return;
+        }
+        setEditingProduct(fullProduct);
+        setModalOpen(true);
+      } catch (error: any) {
+        toast({
+          title: 'Алдаа',
+          description: error.response?.data?.message || 'Барааны дэлгэрэнгүй мэдээлэл авахад алдаа гарлаа',
+          variant: 'destructive',
+        });
+      }
+    };
+    openEditModal();
   };
 
   const handleDelete = async (id: string) => {
