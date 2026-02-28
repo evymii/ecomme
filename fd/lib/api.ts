@@ -32,7 +32,18 @@ const RETRYABLE_STATUS = [408, 425, 429, 500, 502, 503, 504];
 // Add auth token to requests and handle Content-Type
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('token');
+    let token = localStorage.getItem('token');
+    if (!token) {
+      try {
+        const persisted = localStorage.getItem('auth-storage');
+        if (persisted) {
+          const parsed = JSON.parse(persisted);
+          token = parsed?.state?.token || null;
+        }
+      } catch (_e) {
+        // Ignore parse errors and continue without token
+      }
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

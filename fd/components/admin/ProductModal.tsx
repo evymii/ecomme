@@ -235,10 +235,10 @@ export default function ProductModal({
 
       // Don't set Content-Type header - let axios/browser set it automatically for FormData
       if (product) {
-        await api.put(`/admin/products/${product._id}`, formDataToSend);
+        await api.put(`/admin/products/${product._id}`, formDataToSend, { timeout: 30000 });
         toast({ title: 'Амжилттай', description: 'Бараа шинэчлэгдлээ' });
       } else {
-        await api.post('/admin/products', formDataToSend);
+        await api.post('/admin/products', formDataToSend, { timeout: 30000 });
         toast({ title: 'Амжилттай', description: 'Бараа нэмэгдлээ' });
       }
 

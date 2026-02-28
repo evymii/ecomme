@@ -16,6 +16,7 @@ import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useToast } from '@/hooks/use-toast';
 import OrderReceipt from '@/components/admin/OrderReceipt';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
+import { useAuthStore } from '@/store/auth-store';
 
 interface Order {
   _id: string;
@@ -67,6 +68,7 @@ export default function AdminOrdersPage() {
   const [showReceipt, setShowReceipt] = useState(false);
   const { isAdmin, isChecking } = useAdminAuth();
   const { toast } = useToast();
+  const logout = useAuthStore((state) => state.logout);
 
   // Set date range helper functions
   const setDateRange = (start: Date, end: Date) => {
@@ -95,7 +97,9 @@ export default function AdminOrdersPage() {
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
       
-      const response = await api.get(`/admin/orders?${params.toString()}`);
+      const response = await api.get(`/admin/orders?${params.toString()}`, {
+        timeout: 30000,
+      });
       
       if (response.data.success) {
         setOrders(response.data.orders || []);
@@ -112,6 +116,11 @@ export default function AdminOrdersPage() {
       }
     } catch (error: any) {
       console.error('Error fetching orders:', error);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        logout();
+        router.push('/');
+        return false;
+      }
       if (showErrorToast) {
         toast({
           title: 'Алдаа',

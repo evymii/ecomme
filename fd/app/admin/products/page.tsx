@@ -15,6 +15,8 @@ import { Search, X } from 'lucide-react';
 import Loader from '@/components/ui/Loader';
 import { PageLoader } from '@/components/ui/Loader';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/store/auth-store';
 
 interface ProductImage {
   url: string;
@@ -47,6 +49,8 @@ export default function AdminProductsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const { isAdmin, isChecking } = useAdminAuth();
   const { toast } = useToast();
+  const router = useRouter();
+  const logout = useAuthStore((state) => state.logout);
 
   // Filter products based on search query
   const filteredProducts = products.filter(product => {
@@ -60,7 +64,7 @@ export default function AdminProductsPage() {
 
   const fetchProducts = useCallback(async () => {
     try {
-      const response = await api.get('/admin/products');
+      const response = await api.get('/admin/products', { timeout: 25000 });
       if (!response.data?.success) {
         toast({
           title: 'Алдаа',
@@ -81,6 +85,11 @@ export default function AdminProductsPage() {
       setProducts(normalizedProducts);
     } catch (error: any) {
       console.error('Error fetching products:', error);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        logout();
+        router.push('/');
+        return;
+      }
       toast({
         title: 'Алдаа',
         description: error.response?.data?.message || 'Бараанууд авахад алдаа гарлаа',
@@ -89,7 +98,7 @@ export default function AdminProductsPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, logout, router]);
 
   useEffect(() => {
     if (isAdmin && !isChecking) {
@@ -113,6 +122,11 @@ export default function AdminProductsPage() {
         setEditingProduct(fullProduct);
         setModalOpen(true);
       } catch (error: any) {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          logout();
+          router.push('/');
+          return;
+        }
         toast({
           title: 'Алдаа',
           description: error.response?.data?.message || 'Барааны дэлгэрэнгүй мэдээлэл авахад алдаа гарлаа',
@@ -130,6 +144,11 @@ export default function AdminProductsPage() {
       fetchProducts();
     } catch (error: any) {
       console.error('Error deleting product:', error);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        logout();
+        router.push('/');
+        return;
+      }
       toast({
         title: 'Алдаа',
         description: error.response?.data?.message || 'Бараа устгахад алдаа гарлаа',
