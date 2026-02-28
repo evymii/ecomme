@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "nodemon",
     "build": "echo 'Skipping build - Vercel handles TypeScript natively'",
-    "start": "node dist/server.js",
+    "start": "tsx src/server.ts",
     "seed": "tsx src/seed.ts"
   },
   "dependencies": {

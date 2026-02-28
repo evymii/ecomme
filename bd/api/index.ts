@@ -122,7 +122,7 @@ async function connectToDatabase() {
 
 // Export serverless function for Vercel
 export default async function handler(req: express.Request, res: express.Response) {
-  // CRITICAL: Set response timeout to 9 seconds (Vercel Hobby plan = 10s max)
+  // Keep a guard timeout just below platform hard timeout.
   const responseTimeout = setTimeout(() => {
     if (!res.headersSent) {
       try {
@@ -135,7 +135,7 @@ export default async function handler(req: express.Request, res: express.Respons
         console.error('Failed to send timeout response:', e);
       }
     }
-  }, 9000); // 9 seconds (1 second buffer before 10s limit)
+  }, 9800);
 
   // Helper to clear timeout and ensure response
   const cleanup = () => {
@@ -147,12 +147,12 @@ export default async function handler(req: express.Request, res: express.Respons
     const isHealthCheck = req.url === '/api/health' || req.url?.startsWith('/api/health');
     
     if (!isHealthCheck) {
-      // Connect to database with strict timeout (3 seconds max for faster response)
+      // Connect to database with balanced timeout for cold starts.
       try {
         await Promise.race([
           connectToDatabase(),
           new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('Database connection timeout after 3 seconds')), 3000)
+            setTimeout(() => reject(new Error('Database connection timeout after 7 seconds')), 7000)
           )
         ]);
       } catch (dbError: any) {
@@ -220,7 +220,7 @@ export default async function handler(req: express.Request, res: express.Respons
         if (!resolved && !res.headersSent) {
           errorHandler(new Error('Response timeout'));
         }
-      }, 8500); // 8.5 seconds safety net
+      }, 9600);
     });
   } catch (error: any) {
     cleanup();

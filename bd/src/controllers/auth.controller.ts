@@ -237,47 +237,36 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
   try {
     const { phoneNumber, password } = req.body;
 
-    console.log('Sign in request received:', {
-      hasPhoneNumber: !!phoneNumber,
-      hasPassword: !!password,
-      phoneNumberLength: phoneNumber?.length,
-      passwordLength: password?.length
-    });
-
     if (!phoneNumber || !password) {
-      console.log('Missing phone number or password');
       res.status(400).json({ success: false, message: 'Утасны дугаар болон нууц үг оруулна уу' });
       return;
     }
 
     // Validate password format
     if (password.length !== 4 || !/^\d{4}$/.test(password)) {
-      console.log('Invalid password format:', password.length, /^\d{4}$/.test(password));
       res.status(400).json({ success: false, message: 'Нууц үг 4 оронтой тоо байх ёстой' });
       return;
     }
 
     // Clean phone number (remove spaces/dashes) - phone number is NOT verified, just used for login
     const cleanPhoneNumber = phoneNumber.trim().replace(/\s|-/g, '');
-    console.log('Cleaned phone number:', cleanPhoneNumber);
 
-    // Find user by phone number (login uses phone number, not email)
-    const user = await User.findOne({ phoneNumber: cleanPhoneNumber });
-    console.log('User found:', !!user, user ? { id: user._id.toString(), phoneNumber: user.phoneNumber } : null);
+    // Find user by phone number using projected fields and index hint
+    const user = await User.findOne({ phoneNumber: cleanPhoneNumber })
+      .select('_id phoneNumber email name role address password')
+      .hint({ phoneNumber: 1 })
+      .maxTimeMS(5000)
+      .lean();
     
     if (!user) {
-      console.log('User not found with phone number:', cleanPhoneNumber);
       res.status(401).json({ success: false, message: 'Утасны дугаар эсвэл нууц үг буруу байна' });
       return;
     }
 
     // Verify password (4-digit password)
-    console.log('Verifying password...');
     const isPasswordValid = await bcrypt.compare(password, user.password);
-    console.log('Password valid:', isPasswordValid);
     
     if (!isPasswordValid) {
-      console.log('Invalid password for user:', user._id.toString());
       res.status(401).json({ success: false, message: 'Утасны дугаар эсвэл нууц үг буруу байна' });
       return;
     }
@@ -287,7 +276,6 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
 
     // Generate JWT token
     const token = generateToken(user._id.toString());
-    console.log('✅ Sign in successful for user:', user._id.toString(), user.name);
 
     res.json({
       success: true,

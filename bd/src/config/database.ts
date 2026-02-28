@@ -12,7 +12,9 @@ export const connectDB = async (): Promise<void> => {
       console.log('Using existing MongoDB connection');
       if (!indexesFixed) {
         indexesFixed = true;
-        await fixDatabaseIndexes();
+        fixDatabaseIndexes().catch((error) => {
+          console.error('Index fix failed (background):', error);
+        });
       }
       return;
     }
@@ -30,9 +32,9 @@ export const connectDB = async (): Promise<void> => {
     }
 
     cachedConnection = await mongoose.connect(mongoURI, {
-      serverSelectionTimeoutMS: 3000, // 3 seconds - faster for serverless
-      socketTimeoutMS: 15000, // 15 seconds for socket operations
-      connectTimeoutMS: 3000, // 3 seconds connection timeout
+      serverSelectionTimeoutMS: 7000, // Allow more time for cold starts/network jitter
+      socketTimeoutMS: 20000,
+      connectTimeoutMS: 7000,
       maxPoolSize: 1, // Single connection for serverless
       minPoolSize: 0, // Allow connection to close when idle
       maxIdleTimeMS: 20000, // Close idle connections after 20s
@@ -44,7 +46,9 @@ export const connectDB = async (): Promise<void> => {
     // Fix stale indexes on first connect (must complete before requests)
     if (!indexesFixed) {
       indexesFixed = true;
-      await fixDatabaseIndexes();
+      fixDatabaseIndexes().catch((error) => {
+        console.error('Index fix failed (background):', error);
+      });
     }
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
