@@ -40,6 +40,8 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
   
   const { setUser, setToken, user } = useAuthStore();
   const { toast } = useToast();
+  const mobileDialogClassName =
+    "w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)] max-w-md sm:max-w-md p-4 sm:p-6 max-h-[calc(100dvh-1rem)] overflow-y-auto top-[max(0.5rem,env(safe-area-inset-top))] translate-y-0 sm:top-[50%] sm:translate-y-[-50%]";
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -345,7 +347,7 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
   if (showSuccess) {
     return (
       <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) { resetForm(); } onOpenChange(isOpen); }}>
-        <DialogContent className="max-w-md sm:max-w-md">
+        <DialogContent className={mobileDialogClassName}>
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
               <CheckCircle2 className="w-10 h-10 text-green-600" />
@@ -362,7 +364,7 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
   if (pendingVerification) {
     return (
       <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) resetForm(); onOpenChange(isOpen); }}>
-        <DialogContent className="max-w-md sm:max-w-md">
+        <DialogContent className={mobileDialogClassName}>
           <DialogHeader className="space-y-2 md:space-y-3">
             <DialogTitle className="text-xl md:text-2xl">Имэйл баталгаажуулалт</DialogTitle>
             <DialogDescription className="text-sm md:text-base">
@@ -408,7 +410,7 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
   // ========== RENDER: Main Sign In / Sign Up Form ==========
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) resetForm(); onOpenChange(isOpen); }}>
-      <DialogContent className="max-w-md sm:max-w-md">
+      <DialogContent className={mobileDialogClassName}>
         <DialogHeader className="space-y-2 md:space-y-3">
           <DialogTitle className="text-xl md:text-2xl">{isSignUp ? 'Бүртгүүлэх' : 'Нэвтрэх'}</DialogTitle>
           <DialogDescription className="text-sm md:text-base">

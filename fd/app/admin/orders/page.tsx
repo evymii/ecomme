@@ -72,6 +72,10 @@ export default function AdminOrdersPage() {
   const showLoader = useDelayedLoading(loading, 250);
   const [startDate, setStartDate] = useState(todayFormatted);
   const [endDate, setEndDate] = useState(todayFormatted);
+  const [orderCodeInput, setOrderCodeInput] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [orderCodeFilter, setOrderCodeFilter] = useState('');
+  const [phoneFilter, setPhoneFilter] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -100,12 +104,26 @@ export default function AdminOrdersPage() {
     setDateRange(start, end);
   };
 
+  const applySearch = () => {
+    setOrderCodeFilter(orderCodeInput.trim());
+    setPhoneFilter(phoneInput.trim());
+  };
+
+  const clearSearch = () => {
+    setOrderCodeInput('');
+    setPhoneInput('');
+    setOrderCodeFilter('');
+    setPhoneFilter('');
+  };
+
   const fetchOrders = useCallback(async ({ showErrorToast = true }: { showErrorToast?: boolean } = {}) => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
+      if (orderCodeFilter) params.append('orderCode', orderCodeFilter);
+      if (phoneFilter) params.append('phoneNumber', phoneFilter);
       
       const response = await api.get(`/admin/orders?${params.toString()}`, {
         timeout: 30000,
@@ -142,7 +160,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, toast, logout, router]);
+  }, [startDate, endDate, orderCodeFilter, phoneFilter, toast, logout, router]);
 
   useEffect(() => {
     if (isAdmin && !isChecking) {
@@ -232,38 +250,60 @@ export default function AdminOrdersPage() {
       <main className="container mx-auto px-3 md:px-4 py-4 md:py-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 mb-4 md:mb-8">
           <h1 className="text-xl md:text-3xl font-semibold md:font-bold">Захиалга</h1>
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-            <div className="flex gap-2 items-center">
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-32 md:w-36 text-xs md:text-sm"
-              />
-              <span className="text-sm text-gray-600">-</span>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-32 md:w-36 text-xs md:text-sm"
-              />
+          <div className="flex flex-col gap-3 items-start sm:items-end w-full md:w-auto">
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+              <div className="flex gap-2 items-center">
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-32 md:w-36 text-xs md:text-sm"
+                />
+                <span className="text-sm text-gray-600">-</span>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-32 md:w-36 text-xs md:text-sm"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={setOneWeek}
+                  className="text-xs md:text-sm whitespace-nowrap"
+                >
+                  1 долоо хоног
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={setOneMonth}
+                  className="text-xs md:text-sm whitespace-nowrap"
+                >
+                  1 сар
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={setOneWeek}
-                className="text-xs md:text-sm whitespace-nowrap"
-              >
-                1 долоо хоног
+            <div className="flex flex-col sm:flex-row gap-2 w-full">
+              <Input
+                value={orderCodeInput}
+                onChange={(e) => setOrderCodeInput(e.target.value)}
+                placeholder="Захиалгын кодоор хайх"
+                className="w-full sm:w-44 text-xs md:text-sm"
+              />
+              <Input
+                value={phoneInput}
+                onChange={(e) => setPhoneInput(e.target.value)}
+                placeholder="Утасны дугаараар хайх"
+                className="w-full sm:w-44 text-xs md:text-sm"
+              />
+              <Button size="sm" onClick={applySearch} className="text-xs md:text-sm whitespace-nowrap">
+                Хайх
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={setOneMonth}
-                className="text-xs md:text-sm whitespace-nowrap"
-              >
-                1 сар
+              <Button variant="outline" size="sm" onClick={clearSearch} className="text-xs md:text-sm whitespace-nowrap">
+                Цэвэрлэх
               </Button>
             </div>
           </div>
