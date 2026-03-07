@@ -471,9 +471,13 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
     }
 
     const buildPrefixRegex = (value: string) => new RegExp(`^${escapeRegex(value)}`, 'i');
+    const buildExactRegex = (value: string) => new RegExp(`^${escapeRegex(value)}$`, 'i');
+    const isLikelyPhoneNumber = (value: string) => /^\d{8,}$/.test(value);
 
     const buildPhoneConditions = async (rawPhone: string) => {
-      const phoneRegex = buildPrefixRegex(rawPhone);
+      const cleanedPhone = rawPhone.replace(/\s+/g, '');
+      const useExactMatch = isLikelyPhoneNumber(cleanedPhone);
+      const phoneRegex = useExactMatch ? buildExactRegex(cleanedPhone) : buildPrefixRegex(cleanedPhone);
       const matchedUsers = await User.find({ phoneNumber: { $regex: phoneRegex } })
         .select('_id')
         .limit(100)
@@ -489,16 +493,31 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
 
     const searchQuery = typeof search === 'string' ? search.trim() : '';
     if (searchQuery) {
-      const searchConditions: any[] = [
-        { orderCode: { $regex: buildPrefixRegex(searchQuery) } },
-        ...(await buildPhoneConditions(searchQuery)),
-      ];
-      andConditions.push({ $or: searchConditions });
+      const cleanedSearch = searchQuery.replace(/\s+/g, '');
+      // If input looks like a full phone number, only search by phone to avoid broad order-code matches.
+      if (isLikelyPhoneNumber(cleanedSearch)) {
+        andConditions.push({ $or: await buildPhoneConditions(cleanedSearch) });
+      } else {
+        const searchConditions: any[] = [
+          {
+            orderCode: {
+              $regex: buildPrefixRegex(cleanedSearch),
+            },
+          },
+          ...(await buildPhoneConditions(cleanedSearch)),
+        ];
+        andConditions.push({ $or: searchConditions });
+      }
     } else {
       const orderCodeQuery = typeof orderCode === 'string' ? orderCode.trim() : '';
       if (orderCodeQuery) {
+        const cleanedOrderCode = orderCodeQuery.replace(/\s+/g, '');
         andConditions.push({
-          orderCode: { $regex: buildPrefixRegex(orderCodeQuery) },
+          orderCode: {
+            $regex: isLikelyPhoneNumber(cleanedOrderCode)
+              ? buildExactRegex(cleanedOrderCode)
+              : buildPrefixRegex(cleanedOrderCode),
+          },
         });
       }
 

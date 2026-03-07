@@ -94,13 +94,18 @@ export const createOrder = async (req: Request | AuthRequest, res: Response): Pr
       });
     }
 
-    // Generate short order code (6-8 digits)
-    const timestamp = Date.now().toString();
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    const orderCode = (timestamp.slice(-5) + random).slice(-8); // Last 8 digits
+    const generateUniqueOrderCode = async (): Promise<string> => {
+      for (let i = 0; i < 20; i++) {
+        // 5-digit order number (10000-99999)
+        const candidate = Math.floor(10000 + Math.random() * 90000).toString();
+        const exists = await Order.exists({ orderCode: candidate }).session(session);
+        if (!exists) return candidate;
+      }
+      // Rare fallback to keep flow alive even with heavy collisions.
+      return Math.floor(10000 + Math.random() * 90000).toString();
+    };
 
-    // Create order within transaction (user is optional for guest checkout)
-    const order = new Order({
+    const orderBasePayload = {
       ...(user && { user: user._id }), // Only include user if authenticated
       ...(!user && cleanPhoneNumber && { phoneNumber: cleanPhoneNumber }), // Store phone for guest orders
       ...(!user && email && { email: email.trim() }), // Store email for guest orders
@@ -109,11 +114,32 @@ export const createOrder = async (req: Request | AuthRequest, res: Response): Pr
       total,
       deliveryAddress,
       paymentMethod: paymentMethod || 'pay_later',
-      orderCode,
       status: 'pending'
-    });
+    };
 
-    const savedOrder = await order.save({ session });
+    let savedOrder: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const orderCode = await generateUniqueOrderCode();
+      const order = new Order({
+        ...orderBasePayload,
+        orderCode,
+      });
+
+      try {
+        savedOrder = await order.save({ session });
+        break;
+      } catch (saveError: any) {
+        const isOrderCodeConflict = saveError?.code === 11000 && saveError?.keyPattern?.orderCode;
+        if (isOrderCodeConflict && attempt < 2) {
+          continue;
+        }
+        throw saveError;
+      }
+    }
+
+    if (!savedOrder) {
+      throw new Error('Захиалгын код үүсгэхэд алдаа гарлаа');
+    }
 
     // Update all product stocks within transaction
     for (const { product, newStock } of productsToUpdate) {
