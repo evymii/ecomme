@@ -8,6 +8,7 @@ import productRoutes from '../src/routes/product.routes.js';
 import orderRoutes from '../src/routes/order.routes.js';
 import adminRoutes from '../src/routes/admin.routes.js';
 import categoryRoutes from '../src/routes/category.routes.js';
+import publicRoutes from '../src/routes/public.routes.js';
 import { errorHandler } from '../src/middleware/errorHandler.js';
 
 dotenv.config();
@@ -84,6 +85,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/public', publicRoutes);
 
 // Health check (no database required)
 app.get('/api/health', (req, res) => {
