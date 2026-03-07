@@ -84,13 +84,7 @@ export default function Header() {
         })
         .catch((error: any) => {
           if (isMounted) {
-            // Clear token only when backend confirms token is invalid.
-            if (
-              error.response?.status === 401 ||
-              error.response?.status === 403
-            ) {
-              localStorage.removeItem("token");
-            }
+            // Never force-clear auth state here; logout is user-driven.
           }
         });
 
@@ -249,7 +243,10 @@ export default function Header() {
     </div>
   ) : null;
 
+  const isOnAdminRoute = pathname?.startsWith("/admin");
   const isAdmin = user?.role === "admin";
+  const showAdminUi = isAdmin;
+  const showUserUi = !isAdmin && !isOnAdminRoute;
 
   return (
     <>
@@ -259,7 +256,7 @@ export default function Header() {
             {/* Left: Logo + Nav */}
             <div className="flex items-center gap-8">
               {/* Mobile menu button (admin only) */}
-              {isAdmin && (
+              {showAdminUi && (
                 <button
                   onClick={() => setMobileMenuOpen(true)}
                   className="lg:hidden text-[#02111B] p-1"
@@ -270,7 +267,7 @@ export default function Header() {
               )}
 
               {/* Mobile menu toggle for user - shows nav links */}
-              {!isAdmin && (
+              {showUserUi && (
                 <button
                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                   className="lg:hidden text-[#02111B] p-1"
@@ -292,7 +289,7 @@ export default function Header() {
               </Link>
 
               {/* Desktop Navigation */}
-              {isAdmin ? (
+              {showAdminUi ? (
                 <nav className="hidden lg:flex items-center gap-6">
                   {adminNavItems.map((item) => (
                     <Link
@@ -340,7 +337,7 @@ export default function Header() {
             {/* Right: Search + Actions */}
             <div className="flex items-center gap-3">
               {/* Desktop Search Bar (non-admin) */}
-              {!isAdmin && (
+              {showUserUi && (
                 <div ref={searchRef} className="relative hidden sm:block">
                   <div className="flex items-center gap-2 px-4 py-2 bg-white border border-[#02111B]/10 rounded-full hover:border-[#5D737E]/30 transition-colors">
                     <Search className="w-4 h-4 text-[#5D737E]" />
@@ -370,7 +367,7 @@ export default function Header() {
               )}
 
               {/* Mobile Search Button (non-admin) */}
-              {!isAdmin && (
+              {showUserUi && (
                 <button
                   onClick={() => {
                     setSearchFocused(true);
@@ -389,7 +386,7 @@ export default function Header() {
               {/* User Icon */}
               {user ? (
                 <>
-                  {!isAdmin && (
+                  {showUserUi && (
                     <Link
                       href="/profile"
                       className="p-2 hover:bg-white rounded-full transition-colors"
@@ -416,7 +413,7 @@ export default function Header() {
               )}
 
               {/* Favorites (non-admin) */}
-              {!isAdmin && (
+              {showUserUi && (
                 <Link
                   href="/profile/favorites"
                   className="relative p-2 hover:bg-white rounded-full transition-colors"
@@ -432,7 +429,7 @@ export default function Header() {
               )}
 
               {/* Cart (non-admin) */}
-              {!isAdmin && (
+              {showUserUi && (
                 <button
                   onClick={() => setCartOpen(true)}
                   className="relative p-2 hover:bg-white rounded-full transition-colors"
@@ -450,7 +447,7 @@ export default function Header() {
         </div>
 
         {/* Mobile Navigation Panel (non-admin) */}
-        {!isAdmin && mobileMenuOpen && (
+        {showUserUi && mobileMenuOpen && (
           <div className="lg:hidden border-t border-[#02111B]/5 bg-[#FCFCFC]">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-4">
               <nav className="flex flex-col gap-3">
@@ -484,7 +481,7 @@ export default function Header() {
         )}
 
         {/* Mobile Search Overlay (non-admin, when focused on small screens) */}
-        {!isAdmin && searchFocused && (
+        {showUserUi && searchFocused && (
           <div className="sm:hidden border-t border-[#02111B]/5 bg-[#FCFCFC] px-4 py-3">
             <div ref={mobileSearchRef} className="relative">
               <div className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#02111B]/10 rounded-full">
@@ -515,7 +512,7 @@ export default function Header() {
       </header>
 
       {/* Admin Mobile Sidebar */}
-      {isAdmin && mobileMenuOpen && (
+      {showAdminUi && mobileMenuOpen && (
         <>
           <div
             className="fixed inset-0 bg-[#02111B]/40 z-40 lg:hidden backdrop-blur-sm"

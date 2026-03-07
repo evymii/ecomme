@@ -16,8 +16,6 @@ import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useToast } from '@/hooks/use-toast';
 import OrderReceipt from '@/components/admin/OrderReceipt';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
-import { useAuthStore } from '@/store/auth-store';
-import { useRouter } from 'next/navigation';
 
 interface Order {
   _id: string;
@@ -81,8 +79,6 @@ export default function AdminOrdersPage() {
   const [showReceipt, setShowReceipt] = useState(false);
   const { isAdmin, isChecking } = useAdminAuth();
   const { toast } = useToast();
-  const logout = useAuthStore((state) => state.logout);
-  const router = useRouter();
 
   // Set date range helper functions
   const setDateRange = (start: Date, end: Date) => {
@@ -157,8 +153,13 @@ export default function AdminOrdersPage() {
     } catch (error: any) {
       console.error('Error fetching orders:', error);
       if (error.response?.status === 401 || error.response?.status === 403) {
-        logout();
-        router.push('/');
+        if (showErrorToast) {
+          toast({
+            title: 'Анхааруулга',
+            description: 'Энэ үйлдэлд нэвтрэх эрх хүрэлцэхгүй байна.',
+            variant: 'destructive',
+          });
+        }
         return false;
       }
       if (showErrorToast) {
@@ -172,7 +173,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, searchFilter, toast, logout, router]);
+  }, [startDate, endDate, searchFilter, toast]);
 
   useEffect(() => {
     if (isAdmin && !isChecking) {
@@ -227,6 +228,24 @@ export default function AdminOrdersPage() {
   };
 
   const handleDeleteRangeHistory = async () => {
+    if (!startDate || !endDate) {
+      toast({
+        title: 'Анхааруулга',
+        description: 'Эхлэх болон дуусах огноог сонгоно уу',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (new Date(startDate) > new Date(endDate)) {
+      toast({
+        title: 'Анхааруулга',
+        description: 'Эхлэх огноо дуусах огнооноос хойш байж болохгүй',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const confirmed = window.confirm(
       `Сонгосон хугацааны (${startDate} - ${endDate}) захиалгын түүхийг устгахдаа итгэлтэй байна уу?`
     );

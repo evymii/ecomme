@@ -50,10 +50,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           const status = error?.response?.status;
           const isAuthError = status === 401 || status === 403;
           if (isAuthError) {
-            // Only clear auth on explicit unauthorized responses.
-            localStorage.removeItem('token');
-            setToken(null);
-            setUser(null);
+            // Don't force-logout automatically; user logs out explicitly.
             return;
           }
           // For 5xx/network/cors glitches, keep current auth state.

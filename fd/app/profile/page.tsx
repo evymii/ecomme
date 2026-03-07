@@ -87,7 +87,6 @@ export default function ProfilePage() {
       console.error('Error fetching profile:', error);
       if (error.response?.status === 401) {
         // Unauthorized, redirect to home
-        useAuthStore.getState().logout();
         router.push('/');
       }
     } finally {
@@ -128,7 +127,6 @@ export default function ProfilePage() {
       });
     } catch (error: any) {
       if (error.response?.status === 401) {
-        useAuthStore.getState().logout();
         router.push('/');
       }
       toast({

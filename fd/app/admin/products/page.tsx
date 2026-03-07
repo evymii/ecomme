@@ -15,8 +15,6 @@ import { Search, X } from 'lucide-react';
 import Loader from '@/components/ui/Loader';
 import { PageLoader } from '@/components/ui/Loader';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
-import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/store/auth-store';
 
 interface ProductImage {
   url: string;
@@ -49,8 +47,27 @@ export default function AdminProductsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const { isAdmin, isChecking } = useAdminAuth();
   const { toast } = useToast();
-  const router = useRouter();
-  const logout = useAuthStore((state) => state.logout);
+
+  const handleAdminAuthError = useCallback(async (error: any) => {
+    if (error.response?.status !== 401 && error.response?.status !== 403) {
+      return false;
+    }
+    try {
+      const check = await api.get('/admin/check', { timeout: 8000 });
+      if (check.data?.success && check.data?.isAdmin) {
+        // Session is still valid; this was a transient auth failure.
+        return true;
+      }
+    } catch (_checkError) {
+      // Fall through to logout path.
+    }
+    toast({
+      title: 'Анхааруулга',
+      description: 'Энэ үйлдэлд нэвтрэх эрх хүрэлцэхгүй байна.',
+      variant: 'destructive',
+    });
+    return true;
+  }, [toast]);
 
   // Filter products based on search query
   const filteredProducts = products.filter(product => {
@@ -85,9 +102,7 @@ export default function AdminProductsPage() {
       setProducts(normalizedProducts);
     } catch (error: any) {
       console.error('Error fetching products:', error);
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        logout();
-        router.push('/');
+      if (await handleAdminAuthError(error)) {
         return;
       }
       toast({
@@ -98,7 +113,7 @@ export default function AdminProductsPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast, logout, router]);
+  }, [toast, handleAdminAuthError]);
 
   useEffect(() => {
     if (isAdmin && !isChecking) {
@@ -122,9 +137,7 @@ export default function AdminProductsPage() {
         setEditingProduct(fullProduct);
         setModalOpen(true);
       } catch (error: any) {
-        if (error.response?.status === 401 || error.response?.status === 403) {
-          logout();
-          router.push('/');
+        if (await handleAdminAuthError(error)) {
           return;
         }
         toast({
@@ -144,9 +157,7 @@ export default function AdminProductsPage() {
       fetchProducts();
     } catch (error: any) {
       console.error('Error deleting product:', error);
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        logout();
-        router.push('/');
+      if (await handleAdminAuthError(error)) {
         return;
       }
       toast({

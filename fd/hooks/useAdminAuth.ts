@@ -44,20 +44,6 @@ export function useAdminAuth() {
         const localStorageToken = localStorage.getItem('token');
         const token = storeToken || localStorageToken;
         
-        // If we have user in store and token, and user is admin, we're good
-        if (currentUser?.role === 'admin' && token) {
-          // Ensure token is in both places
-          if (!storeToken && localStorageToken) {
-            useAuthStore.getState().setToken(localStorageToken);
-          }
-          if (isMounted) {
-            setAdminCookie(true);
-            setIsAdmin(true);
-            setIsChecking(false);
-          }
-          return;
-        }
-
         // If no token at all, redirect
         if (!token) {
           setAdminCookie(false);
@@ -75,7 +61,8 @@ export function useAdminAuth() {
           useAuthStore.getState().setToken(token);
         }
 
-        // Use dedicated admin check endpoint (faster and lighter)
+        // Always verify admin role with backend before allowing admin UI.
+        // Do not trust persisted client role alone for authorization-sensitive routes.
         try {
           const response = await api.get('/admin/check');
           if (response.data.success && response.data.isAdmin) {
@@ -110,9 +97,27 @@ export function useAdminAuth() {
           
           // If 401/403, token is invalid or expired
           if (error.response?.status === 401 || error.response?.status === 403) {
-            // Clear invalid token
+            // Retry with profile endpoint before forcing logout.
+            // This avoids accidental logout when admin/check intermittently fails.
+            try {
+              const profileResponse = await api.get('/users/profile');
+              if (profileResponse.data.success && profileResponse.data.user?.role === 'admin') {
+                useAuthStore.getState().setUser({
+                  ...profileResponse.data.user,
+                  id: profileResponse.data.user.id || profileResponse.data.user._id
+                });
+                if (isMounted) {
+                  setAdminCookie(true);
+                  setIsAdmin(true);
+                  setIsChecking(false);
+                }
+                return;
+              }
+            } catch (_profileError) {
+              // Ignore and continue to logout path below.
+            }
+
             setAdminCookie(false);
-            useAuthStore.getState().logout();
             if (isMounted && !hasRedirectedRef.current) {
               setIsChecking(false);
               setIsAdmin(false);
@@ -153,10 +158,6 @@ export function useAdminAuth() {
                 }
               }
             } catch (fallbackError: any) {
-              // If fallback also fails with 401, clear auth
-              if (fallbackError.response?.status === 401) {
-                useAuthStore.getState().logout();
-              }
               setAdminCookie(false);
               if (isMounted && !hasRedirectedRef.current) {
                 setIsChecking(false);
