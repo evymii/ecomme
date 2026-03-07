@@ -254,6 +254,11 @@ export default function AdminOrdersPage() {
     try {
       setBulkDeleting('range');
       const response = await api.delete('/admin/orders', {
+        params: {
+          mode: 'range',
+          startDate,
+          endDate,
+        },
         data: {
           mode: 'range',
           startDate,
@@ -286,6 +291,9 @@ export default function AdminOrdersPage() {
     try {
       setBulkDeleting('all');
       const response = await api.delete('/admin/orders', {
+        params: {
+          mode: 'all',
+        },
         data: {
           mode: 'all',
         },
