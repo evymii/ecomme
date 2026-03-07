@@ -24,31 +24,57 @@ function setCached(key: string, data: any, ttlMs = CACHE_TTL_MS) {
   productCache.set(key, { data, expiresAt: Date.now() + ttlMs });
 }
 
+function getPagination(req: Request) {
+  const pageRaw = Number.parseInt(String(req.query.page || '1'), 10);
+  const limitRaw = Number.parseInt(String(req.query.limit || '12'), 10);
+  const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 12;
+  const skip = (page - 1) * limit;
+  return { page, limit, skip };
+}
+
 export const getAllProducts = async (req: Request, res: Response): Promise<void> => {
   try {
-    const cacheKey = 'products:all';
-    const cachedProducts = getCached<any[]>(cacheKey);
-    if (cachedProducts) {
+    const { page, limit, skip } = getPagination(req);
+    const cacheKey = `products:all:${page}:${limit}`;
+    const cachedPayload = getCached<any>(cacheKey);
+    if (cachedPayload) {
       res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
       res.setHeader('X-Cache', 'HIT');
-      res.json({ success: true, products: cachedProducts });
+      res.json(cachedPayload);
       return;
     }
 
-    // Optimize: use lean() for faster queries and select only needed fields
-    const products = await Product.find()
-      .select('name price images features stock category createdAt code')
-      .slice('images', 1)
-      .sort({ createdAt: -1 })
-      .limit(100) // Limit results for better performance
-      .lean()
-      .maxTimeMS(5000);
+    // Optimize: paginated + lean + projected fields
+    const [products, total] = await Promise.all([
+      Product.find()
+        .select('name price images features stock category createdAt code')
+        .slice('images', 1)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .maxTimeMS(5000),
+      Product.countDocuments(),
+    ]);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const payload = {
+      success: true,
+      products,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasMore: page < totalPages,
+      },
+    };
     
     // Set cache headers
-    setCached(cacheKey, products);
+    setCached(cacheKey, payload);
     res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
     res.setHeader('X-Cache', 'MISS');
-    res.json({ success: true, products });
+    res.json(payload);
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -74,6 +100,7 @@ export const getProductById = async (req: Request, res: Response): Promise<void>
 export const getProductsByCategory = async (req: Request, res: Response): Promise<void> => {
   try {
     const { category } = req.params;
+    const { page, limit, skip } = getPagination(req);
     
     // Decode URL-encoded category parameter
     const decodedCategory = decodeURIComponent(category);
@@ -103,29 +130,45 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
       categoryName = decodedCategory;
     }
     
-    const cacheKey = `products:category:${categoryName}`;
-    const cachedProducts = getCached<any[]>(cacheKey);
-    if (cachedProducts) {
+    const cacheKey = `products:category:${categoryName}:${page}:${limit}`;
+    const cachedPayload = getCached<any>(cacheKey);
+    if (cachedPayload) {
       res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
       res.setHeader('X-Cache', 'HIT');
-      res.json({ success: true, products: cachedProducts });
+      res.json(cachedPayload);
       return;
     }
 
-    // Optimize: use lean() and select only needed fields
-    const products = await Product.find({ category: categoryName })
-      .select('name price images features stock category createdAt code')
-      .slice('images', 1)
-      .sort({ createdAt: -1 })
-      .limit(100) // Limit results
-      .lean()
-      .maxTimeMS(5000);
+    // Optimize: paginated + lean + projected fields
+    const [products, total] = await Promise.all([
+      Product.find({ category: categoryName })
+        .select('name price images features stock category createdAt code')
+        .slice('images', 1)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .maxTimeMS(5000),
+      Product.countDocuments({ category: categoryName }),
+    ]);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const payload = {
+      success: true,
+      products,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasMore: page < totalPages,
+      },
+    };
     
     // Set cache headers
-    setCached(cacheKey, products);
+    setCached(cacheKey, payload);
     res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
     res.setHeader('X-Cache', 'MISS');
-    res.json({ success: true, products });
+    res.json(payload);
   } catch (error: any) {
     console.error('Error fetching products by category:', error);
     res.status(500).json({ success: false, message: error.message });

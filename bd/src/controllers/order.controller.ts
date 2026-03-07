@@ -253,7 +253,15 @@ export const getUserOrders = async (req: AuthRequest, res: Response): Promise<vo
       .sort({ createdAt: -1 })
       .lean();
 
-    res.json({ success: true, orders });
+    const normalizedOrders = orders.map((order: any) => ({
+      ...order,
+      orderCode:
+        typeof order.orderCode === 'string' && order.orderCode.length > 5
+          ? order.orderCode.slice(-5)
+          : order.orderCode,
+    }));
+
+    res.json({ success: true, orders: normalizedOrders });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

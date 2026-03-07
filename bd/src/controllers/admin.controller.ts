@@ -545,6 +545,11 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
 
     // Normalize legacy documents so admin UI always receives these fields.
     const normalizedOrders = orders.map((order: any) => {
+      const normalizedOrderCode =
+        typeof order.orderCode === 'string' && order.orderCode.length > 5
+          ? order.orderCode.slice(-5)
+          : order.orderCode;
+
       const normalizedDeliveryAddress = order.deliveryAddress?.address
         ? order.deliveryAddress
         : typeof order.deliveryAddress === 'string'
@@ -563,6 +568,7 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
 
       return {
         ...order,
+        orderCode: normalizedOrderCode,
         deliveryAddress: normalizedDeliveryAddress,
         paymentMethod: normalizedPaymentMethod,
       };
@@ -575,6 +581,62 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
     res.json({ success: true, orders: normalizedOrders });
   } catch (error: any) {
     console.error('❌ Error fetching orders for admin:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const deleteOrder = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const deletedOrder = await Order.findByIdAndDelete(id);
+
+    if (!deletedOrder) {
+      res.status(404).json({ success: false, message: 'Захиалга олдсонгүй' });
+      return;
+    }
+
+    res.json({ success: true, message: 'Захиалга амжилттай устгагдлаа' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const deleteOrderHistory = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { mode, startDate, endDate } = req.body || {};
+    const normalizedMode = mode === 'all' ? 'all' : 'range';
+    const query: any = {};
+
+    if (normalizedMode === 'range') {
+      if (!startDate && !endDate) {
+        res.status(400).json({ success: false, message: 'Эхлэх эсвэл дуусах огноо оруулна уу' });
+        return;
+      }
+
+      query.createdAt = {};
+      if (startDate) {
+        const start = new Date(startDate as string);
+        start.setHours(0, 0, 0, 0);
+        query.createdAt.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate as string);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
+    }
+
+    const result = await Order.deleteMany(query);
+
+    res.json({
+      success: true,
+      message:
+        normalizedMode === 'all'
+          ? 'Бүх захиалгын түүх амжилттай устгагдлаа'
+          : 'Сонгосон хугацааны захиалгын түүх амжилттай устгагдлаа',
+      deletedCount: result.deletedCount || 0,
+    });
+  } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
 };

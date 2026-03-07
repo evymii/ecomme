@@ -12,6 +12,8 @@ import {
   updateProduct, 
   deleteProduct, 
   getAllOrders, 
+  deleteOrder,
+  deleteOrderHistory,
   updateOrderStatus 
 } from '../controllers/admin.controller.js';
 import { getAllCategories, createCategory, updateCategory, deleteCategory } from '../controllers/category.controller.js';
@@ -48,6 +50,8 @@ router.delete('/products/:id', deleteProduct);
 
 // Orders
 router.get('/orders', getAllOrders);
+router.delete('/orders', deleteOrderHistory);
+router.delete('/orders/:id', deleteOrder);
 router.put('/orders/:id/status', updateOrderStatus);
 
 export default router;

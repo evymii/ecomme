@@ -6,6 +6,13 @@ type HomePayload = {
   featuredProducts: any[];
   discountedProducts: any[];
   allProducts: any[];
+  allProductsPagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
   categories: any[];
 };
 
@@ -26,7 +33,7 @@ export const getHomeData = async (_req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const [featuredProducts, discountedProducts, allProducts, categories] = await Promise.all([
+    const [featuredProducts, discountedProducts, allProducts, totalAllProducts, categories] = await Promise.all([
       Product.find({
         $or: [{ 'features.isNew': true }, { 'features.isFeatured': true }],
       })
@@ -47,20 +54,29 @@ export const getHomeData = async (_req: Request, res: Response): Promise<void> =
         .select('name price images features stock category createdAt code')
         .slice('images', 1)
         .sort({ createdAt: -1 })
-        .limit(100)
+        .limit(12)
         .lean()
         .maxTimeMS(5000),
+      Product.countDocuments(),
       Category.find({ isActive: true })
         .select('name')
         .sort({ name: 1 })
         .lean()
         .maxTimeMS(4000),
     ]);
+    const allProductsTotalPages = Math.max(1, Math.ceil(totalAllProducts / 12));
 
     const payload: HomePayload = {
       featuredProducts,
       discountedProducts,
       allProducts,
+      allProductsPagination: {
+        page: 1,
+        limit: 12,
+        total: totalAllProducts,
+        totalPages: allProductsTotalPages,
+        hasMore: allProductsTotalPages > 1,
+      },
       categories,
     };
 

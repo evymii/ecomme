@@ -254,7 +254,6 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
     // Find user by phone number using projected fields and index hint
     const user = await User.findOne({ phoneNumber: cleanPhoneNumber })
       .select('_id phoneNumber email name role address password')
-      .hint({ phoneNumber: 1 })
       .maxTimeMS(5000)
       .lean();
     
