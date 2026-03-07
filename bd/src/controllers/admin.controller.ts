@@ -451,21 +451,60 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
     const { startDate, endDate, orderCode, phoneNumber, search } = req.query;
     const andConditions: any[] = [];
     const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parseDateSafe = (value: unknown, endOfDay = false): Date | null => {
+      if (!value || typeof value !== 'string') return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+
+      const ymdMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (ymdMatch) {
+        const year = Number(ymdMatch[1]);
+        const month = Number(ymdMatch[2]);
+        const day = Number(ymdMatch[3]);
+        if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+        const parsed = new Date(year, month - 1, day);
+        if (
+          Number.isNaN(parsed.getTime()) ||
+          parsed.getFullYear() !== year ||
+          parsed.getMonth() !== month - 1 ||
+          parsed.getDate() !== day
+        ) {
+          return null;
+        }
+        if (endOfDay) parsed.setHours(23, 59, 59, 999);
+        else parsed.setHours(0, 0, 0, 0);
+        return parsed;
+      }
+
+      const parsed = new Date(trimmed);
+      if (Number.isNaN(parsed.getTime())) return null;
+      if (endOfDay) parsed.setHours(23, 59, 59, 999);
+      else parsed.setHours(0, 0, 0, 0);
+      return parsed;
+    };
 
     const createdAtFilter: any = {};
 
     if (startDate || endDate) {
       if (startDate) {
-        // Set to start of day (00:00:00.000) in local timezone
-        const start = new Date(startDate as string);
-        start.setHours(0, 0, 0, 0);
+        const start = parseDateSafe(startDate);
+        if (!start) {
+          res.status(400).json({ success: false, message: 'Эхлэх огнооны формат буруу байна' });
+          return;
+        }
         createdAtFilter.$gte = start;
       }
       if (endDate) {
-        // Set to end of day (23:59:59.999) in local timezone to include all orders on that day
-        const end = new Date(endDate as string);
-        end.setHours(23, 59, 59, 999);
+        const end = parseDateSafe(endDate, true);
+        if (!end) {
+          res.status(400).json({ success: false, message: 'Дуусах огнооны формат буруу байна' });
+          return;
+        }
         createdAtFilter.$lte = end;
+      }
+      if (createdAtFilter.$gte && createdAtFilter.$lte && createdAtFilter.$gte > createdAtFilter.$lte) {
+        res.status(400).json({ success: false, message: 'Эхлэх огноо дуусах огнооноос хойш байж болохгүй' });
+        return;
       }
       andConditions.push({ createdAt: createdAtFilter });
     }
@@ -685,14 +724,33 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
       }
     }
 
-    const result = await Order.deleteMany(deleteQuery);
+    if (normalizedMode === 'all') {
+      const result = await Order.deleteMany({});
+      res.json({
+        success: true,
+        message: 'Бүх захиалгын түүх амжилттай устгагдлаа',
+        deletedCount: result.deletedCount || 0,
+      });
+      return;
+    }
+
+    // Range mode: find matching orders first, then delete explicitly by IDs.
+    const matchingOrders = await Order.find(deleteQuery).select('_id').lean();
+    const idsToDelete = matchingOrders.map((o: any) => o._id).filter(Boolean);
+    if (idsToDelete.length === 0) {
+      res.json({
+        success: true,
+        message: 'Сонгосон хугацаанд устгах захиалга олдсонгүй',
+        deletedCount: 0,
+      });
+      return;
+    }
+
+    const result = await Order.deleteMany({ _id: { $in: idsToDelete } });
 
     res.json({
       success: true,
-      message:
-        normalizedMode === 'all'
-          ? 'Бүх захиалгын түүх амжилттай устгагдлаа'
-          : 'Сонгосон хугацааны захиалгын түүх амжилттай устгагдлаа',
+      message: 'Сонгосон хугацааны захиалгын түүх амжилттай устгагдлаа',
       deletedCount: result.deletedCount || 0,
     });
   } catch (error: any) {
