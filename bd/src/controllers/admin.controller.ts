@@ -448,7 +448,7 @@ export const deleteProduct = async (req: Request, res: Response): Promise<void> 
 
 export const getAllOrders = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { startDate, endDate, orderCode, phoneNumber } = req.query;
+    const { startDate, endDate, orderCode, phoneNumber, search } = req.query;
     const andConditions: any[] = [];
     const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -470,16 +470,8 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
       andConditions.push({ createdAt: createdAtFilter });
     }
 
-    const orderCodeQuery = typeof orderCode === 'string' ? orderCode.trim() : '';
-    if (orderCodeQuery) {
-      andConditions.push({
-        orderCode: { $regex: escapeRegex(orderCodeQuery), $options: 'i' },
-      });
-    }
-
-    const phoneQuery = typeof phoneNumber === 'string' ? phoneNumber.trim() : '';
-    if (phoneQuery) {
-      const phoneRegex = new RegExp(escapeRegex(phoneQuery), 'i');
+    const buildPhoneConditions = async (rawPhone: string) => {
+      const phoneRegex = new RegExp(escapeRegex(rawPhone), 'i');
       const matchedUsers = await User.find({ phoneNumber: { $regex: phoneRegex } })
         .select('_id')
         .limit(100)
@@ -490,7 +482,28 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
       if (matchedUserIds.length > 0) {
         phoneConditions.push({ user: { $in: matchedUserIds } });
       }
-      andConditions.push({ $or: phoneConditions });
+      return phoneConditions;
+    };
+
+    const searchQuery = typeof search === 'string' ? search.trim() : '';
+    if (searchQuery) {
+      const searchConditions: any[] = [
+        { orderCode: { $regex: escapeRegex(searchQuery), $options: 'i' } },
+        ...(await buildPhoneConditions(searchQuery)),
+      ];
+      andConditions.push({ $or: searchConditions });
+    } else {
+      const orderCodeQuery = typeof orderCode === 'string' ? orderCode.trim() : '';
+      if (orderCodeQuery) {
+        andConditions.push({
+          orderCode: { $regex: escapeRegex(orderCodeQuery), $options: 'i' },
+        });
+      }
+
+      const phoneQuery = typeof phoneNumber === 'string' ? phoneNumber.trim() : '';
+      if (phoneQuery) {
+        andConditions.push({ $or: await buildPhoneConditions(phoneQuery) });
+      }
     }
 
     const query = andConditions.length > 0 ? { $and: andConditions } : {};
