@@ -240,10 +240,12 @@ export default function AdminOrdersPage() {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="container mx-auto px-3 md:px-4 py-4 md:py-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 items-start md:items-center mb-4 md:mb-8">
-          <h1 className="text-xl md:text-3xl font-semibold md:font-bold md:justify-self-start">Захиалга</h1>
+        <div className="flex flex-col gap-3 md:gap-4 md:flex-row md:items-center mb-4 md:mb-8">
+          <div className="md:flex-1 md:flex md:justify-start">
+            <h1 className="text-xl md:text-3xl font-semibold md:font-bold">Захиалга</h1>
+          </div>
 
-          <div className="w-full md:max-w-sm md:justify-self-center">
+          <div className="w-full md:w-[420px] lg:w-[460px]">
             <Input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
@@ -252,39 +254,41 @@ export default function AdminOrdersPage() {
             />
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center md:justify-self-end">
-            <div className="flex gap-2 items-center">
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-32 md:w-36 text-xs md:text-sm"
-              />
-              <span className="text-sm text-gray-600">-</span>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-32 md:w-36 text-xs md:text-sm"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={setOneWeek}
-                className="text-xs md:text-sm whitespace-nowrap"
-              >
-                1 долоо хоног
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={setOneMonth}
-                className="text-xs md:text-sm whitespace-nowrap"
-              >
-                1 сар
-              </Button>
+          <div className="md:flex-1 md:flex md:justify-end">
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+              <div className="flex gap-2 items-center">
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-32 md:w-36 text-xs md:text-sm"
+                />
+                <span className="text-sm text-gray-600">-</span>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-32 md:w-36 text-xs md:text-sm"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={setOneWeek}
+                  className="text-xs md:text-sm whitespace-nowrap"
+                >
+                  1 долоо хоног
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={setOneMonth}
+                  className="text-xs md:text-sm whitespace-nowrap"
+                >
+                  1 сар
+                </Button>
+              </div>
             </div>
           </div>
         </div>
