@@ -470,8 +470,10 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
       andConditions.push({ createdAt: createdAtFilter });
     }
 
+    const buildPrefixRegex = (value: string) => new RegExp(`^${escapeRegex(value)}`, 'i');
+
     const buildPhoneConditions = async (rawPhone: string) => {
-      const phoneRegex = new RegExp(escapeRegex(rawPhone), 'i');
+      const phoneRegex = buildPrefixRegex(rawPhone);
       const matchedUsers = await User.find({ phoneNumber: { $regex: phoneRegex } })
         .select('_id')
         .limit(100)
@@ -488,7 +490,7 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
     const searchQuery = typeof search === 'string' ? search.trim() : '';
     if (searchQuery) {
       const searchConditions: any[] = [
-        { orderCode: { $regex: escapeRegex(searchQuery), $options: 'i' } },
+        { orderCode: { $regex: buildPrefixRegex(searchQuery) } },
         ...(await buildPhoneConditions(searchQuery)),
       ];
       andConditions.push({ $or: searchConditions });
@@ -496,7 +498,7 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
       const orderCodeQuery = typeof orderCode === 'string' ? orderCode.trim() : '';
       if (orderCodeQuery) {
         andConditions.push({
-          orderCode: { $regex: escapeRegex(orderCodeQuery), $options: 'i' },
+          orderCode: { $regex: buildPrefixRegex(orderCodeQuery) },
         });
       }
 
