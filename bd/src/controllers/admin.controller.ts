@@ -606,22 +606,47 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
     const { mode, startDate, endDate } = req.body || {};
     const normalizedMode = mode === 'all' ? 'all' : 'range';
     const query: any = {};
+    const parseDateSafe = (value: any, endOfDay = false): Date | null => {
+      if (!value || typeof value !== 'string') return null;
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return null;
+      if (endOfDay) {
+        parsed.setHours(23, 59, 59, 999);
+      } else {
+        parsed.setHours(0, 0, 0, 0);
+      }
+      return parsed;
+    };
 
     if (normalizedMode === 'range') {
-      if (!startDate && !endDate) {
-        res.status(400).json({ success: false, message: 'Эхлэх эсвэл дуусах огноо оруулна уу' });
+      const start = parseDateSafe(startDate);
+      const end = parseDateSafe(endDate, true);
+
+      if (!start && !end) {
+        res.status(400).json({ success: false, message: 'Эхлэх болон дуусах огноогоо зөв оруулна уу' });
+        return;
+      }
+
+      if (startDate && !start) {
+        res.status(400).json({ success: false, message: 'Эхлэх огнооны формат буруу байна' });
+        return;
+      }
+
+      if (endDate && !end) {
+        res.status(400).json({ success: false, message: 'Дуусах огнооны формат буруу байна' });
+        return;
+      }
+
+      if (start && end && start > end) {
+        res.status(400).json({ success: false, message: 'Эхлэх огноо дуусах огнооноос хойш байж болохгүй' });
         return;
       }
 
       query.createdAt = {};
-      if (startDate) {
-        const start = new Date(startDate as string);
-        start.setHours(0, 0, 0, 0);
+      if (start) {
         query.createdAt.$gte = start;
       }
-      if (endDate) {
-        const end = new Date(endDate as string);
-        end.setHours(23, 59, 59, 999);
+      if (end) {
         query.createdAt.$lte = end;
       }
     }
@@ -637,6 +662,7 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
       deletedCount: result.deletedCount || 0,
     });
   } catch (error: any) {
+    console.error('❌ Delete order history error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
