@@ -22,15 +22,43 @@ async function getHomeData(): Promise<HomeData> {
     allProducts: [],
     categories: [],
   };
+  const apiBase = getApiBaseUrl();
+
+  const fetchLegacyHomeData = async (): Promise<HomeData> => {
+    try {
+      const [featuredRes, discountedRes, productsRes, categoriesRes] = await Promise.all([
+        fetch(`${apiBase}/products/featured`, { next: { revalidate: 60 } }),
+        fetch(`${apiBase}/products/discounted`, { next: { revalidate: 60 } }),
+        fetch(`${apiBase}/products`, { next: { revalidate: 60 } }),
+        fetch(`${apiBase}/categories`, { next: { revalidate: 60 } }),
+      ]);
+
+      const [featuredData, discountedData, productsData, categoriesData] = await Promise.all([
+        featuredRes.ok ? featuredRes.json() : Promise.resolve({}),
+        discountedRes.ok ? discountedRes.json() : Promise.resolve({}),
+        productsRes.ok ? productsRes.json() : Promise.resolve({}),
+        categoriesRes.ok ? categoriesRes.json() : Promise.resolve({}),
+      ]);
+
+      return {
+        featuredProducts: featuredData?.products || [],
+        discountedProducts: discountedData?.products || [],
+        allProducts: productsData?.products || [],
+        categories: categoriesData?.categories || [],
+      };
+    } catch {
+      return fallback;
+    }
+  };
 
   try {
-    const res = await fetch(`${getApiBaseUrl()}/public/home`, {
+    const res = await fetch(`${apiBase}/public/home`, {
       next: { revalidate: 60 },
     });
 
-    if (!res.ok) return fallback;
+    if (!res.ok) return fetchLegacyHomeData();
     const data = await res.json();
-    if (!data?.success) return fallback;
+    if (!data?.success) return fetchLegacyHomeData();
 
     return {
       featuredProducts: data.featuredProducts || [],
@@ -39,7 +67,7 @@ async function getHomeData(): Promise<HomeData> {
       categories: data.categories || [],
     };
   } catch {
-    return fallback;
+    return fetchLegacyHomeData();
   }
 }
 
