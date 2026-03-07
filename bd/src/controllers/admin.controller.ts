@@ -603,12 +603,46 @@ export const deleteOrder = async (req: Request, res: Response): Promise<void> =>
 
 export const deleteOrderHistory = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { mode, startDate, endDate } = req.body || {};
+    const body = req.body || {};
+    const query = req.query || {};
+    const mode = (body.mode ?? query.mode) as string | undefined;
+    const startDate = (body.startDate ?? query.startDate) as string | undefined;
+    const endDate = (body.endDate ?? query.endDate) as string | undefined;
     const normalizedMode = mode === 'all' ? 'all' : 'range';
-    const query: any = {};
+    const deleteQuery: any = {};
     const parseDateSafe = (value: any, endOfDay = false): Date | null => {
       if (!value || typeof value !== 'string') return null;
-      const parsed = new Date(value);
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+
+      // Prefer explicit YYYY-MM-DD parsing to avoid runtime/environment differences.
+      const ymdMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (ymdMatch) {
+        const year = Number(ymdMatch[1]);
+        const month = Number(ymdMatch[2]);
+        const day = Number(ymdMatch[3]);
+        if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+        if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+        const parsed = new Date(year, month - 1, day);
+        if (Number.isNaN(parsed.getTime())) return null;
+        if (
+          parsed.getFullYear() !== year ||
+          parsed.getMonth() !== month - 1 ||
+          parsed.getDate() !== day
+        ) {
+          return null;
+        }
+
+        if (endOfDay) {
+          parsed.setHours(23, 59, 59, 999);
+        } else {
+          parsed.setHours(0, 0, 0, 0);
+        }
+        return parsed;
+      }
+
+      const parsed = new Date(trimmed);
       if (Number.isNaN(parsed.getTime())) return null;
       if (endOfDay) {
         parsed.setHours(23, 59, 59, 999);
@@ -642,16 +676,16 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
         return;
       }
 
-      query.createdAt = {};
+      deleteQuery.createdAt = {};
       if (start) {
-        query.createdAt.$gte = start;
+        deleteQuery.createdAt.$gte = start;
       }
       if (end) {
-        query.createdAt.$lte = end;
+        deleteQuery.createdAt.$lte = end;
       }
     }
 
-    const result = await Order.deleteMany(query);
+    const result = await Order.deleteMany(deleteQuery);
 
     res.json({
       success: true,
