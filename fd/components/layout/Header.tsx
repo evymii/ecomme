@@ -1,19 +1,29 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { ShoppingCart, User, LogOut, Menu, X, Search, Heart } from 'lucide-react';
-import { useCartStore } from '@/store/cart-store';
-import { useFavoritesStore } from '@/store/favorites-store';
-import { useAuthStore } from '@/store/auth-store';
-import dynamic from 'next/dynamic';
-const AuthModal = dynamic(() => import('@/components/auth/AuthModal'), { ssr: false });
-import CartSidebar from '@/components/cart/CartSidebar';
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import api from '@/lib/api';
-import { cn } from '@/lib/utils';
-import Image from 'next/image';
-import { getImageUrl } from '@/lib/image-utils';
+import Link from "next/link";
+import {
+  ShoppingCart,
+  User,
+  LogOut,
+  Menu,
+  X,
+  Search,
+  Heart,
+} from "lucide-react";
+import { useCartStore } from "@/store/cart-store";
+import { useFavoritesStore } from "@/store/favorites-store";
+import { useAuthStore } from "@/store/auth-store";
+import dynamic from "next/dynamic";
+const AuthModal = dynamic(() => import("@/components/auth/AuthModal"), {
+  ssr: false,
+});
+import CartSidebar from "@/components/cart/CartSidebar";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import api from "@/lib/api";
+import { cn } from "@/lib/utils";
+import Image from "next/image";
+import { getImageUrl } from "@/lib/image-utils";
 
 interface SearchProduct {
   _id: string;
@@ -24,10 +34,10 @@ interface SearchProduct {
 }
 
 const adminNavItems = [
-  { href: '/admin/orders', label: 'Захиалгууд' },
-  { href: '/admin/users', label: 'Хэрэглэгчид' },
-  { href: '/admin/categories', label: 'Ангилал' },
-  { href: '/admin/products', label: 'Бараа' },
+  { href: "/admin/orders", label: "Захиалгууд" },
+  { href: "/admin/users", label: "Хэрэглэгчид" },
+  { href: "/admin/categories", label: "Ангилал" },
+  { href: "/admin/products", label: "Бараа" },
 ];
 
 export default function Header() {
@@ -43,7 +53,7 @@ export default function Header() {
   const pathname = usePathname();
 
   // Search state
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchProduct[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState(false);
@@ -60,11 +70,12 @@ export default function Header() {
 
   useEffect(() => {
     // Check auth on mount only once
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (token && !user) {
       let isMounted = true;
-      
-      api.get('/users/profile')
+
+      api
+        .get("/users/profile")
         .then((response) => {
           if (isMounted && response.data.success) {
             useAuthStore.getState().setUser(response.data.user);
@@ -74,12 +85,15 @@ export default function Header() {
         .catch((error: any) => {
           if (isMounted) {
             // Clear token only when backend confirms token is invalid.
-            if (error.response?.status === 401 || error.response?.status === 403) {
-              localStorage.removeItem('token');
+            if (
+              error.response?.status === 401 ||
+              error.response?.status === 403
+            ) {
+              localStorage.removeItem("token");
             }
           }
         });
-      
+
       return () => {
         isMounted = false;
       };
@@ -102,16 +116,19 @@ export default function Header() {
 
     const timer = setTimeout(async () => {
       try {
-        const response = await api.get(`/products/search?q=${encodeURIComponent(searchQuery)}`, {
-          signal: abortController.signal,
-        });
+        const response = await api.get(
+          `/products/search?q=${encodeURIComponent(searchQuery)}`,
+          {
+            signal: abortController.signal,
+          },
+        );
         if (!abortController.signal.aborted) {
           setSearchResults(response.data.products || []);
           setSearchError(false);
         }
       } catch (error: any) {
         if (!abortController.signal.aborted) {
-          console.error('Search error:', error);
+          console.error("Search error:", error);
           setSearchResults([]);
           setSearchError(true);
         }
@@ -138,28 +155,31 @@ export default function Header() {
         setSearchFocused(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   // Close search on route change
   useEffect(() => {
     setSearchFocused(false);
-    setSearchQuery('');
+    setSearchQuery("");
     setSearchResults([]);
   }, [pathname]);
 
   const handleLogout = () => {
     logout();
-    router.push('/');
+    router.push("/");
   };
 
-  const handleProductClick = useCallback((productId: string) => {
-    setSearchFocused(false);
-    setSearchQuery('');
-    setSearchResults([]);
-    router.push(`/products/${productId}`);
-  }, [router]);
+  const handleProductClick = useCallback(
+    (productId: string) => {
+      setSearchFocused(false);
+      setSearchQuery("");
+      setSearchResults([]);
+      router.push(`/products/${productId}`);
+    },
+    [router],
+  );
 
   const showDropdown = searchFocused && searchQuery.trim().length > 0;
 
@@ -167,7 +187,9 @@ export default function Header() {
   const searchDropdownContent = showDropdown ? (
     <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-[#02111B]/10 max-h-[70vh] overflow-y-auto z-50">
       {searchLoading ? (
-        <div className="p-5 text-center text-[#5D737E] text-sm font-light">Хайж байна...</div>
+        <div className="p-5 text-center text-[#5D737E] text-sm font-light">
+          Хайж байна...
+        </div>
       ) : searchError ? (
         <div className="p-5 text-center text-red-500 text-sm font-light">
           Хайлт хийхэд алдаа гарлаа. Дахин оролдоно уу.
@@ -175,11 +197,15 @@ export default function Header() {
       ) : searchResults.length > 0 ? (
         <div className="divide-y divide-[#02111B]/5 py-1">
           {searchResults.map((product) => {
-            const mainImage = product.images.find(img => img.isMain) || product.images[0];
+            const mainImage =
+              product.images.find((img) => img.isMain) || product.images[0];
             return (
               <button
                 key={product._id}
-                onMouseDown={(e) => { e.preventDefault(); handleProductClick(product._id); }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleProductClick(product._id);
+                }}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#5D737E]/5 transition-colors text-left"
               >
                 <div className="relative w-11 h-11 flex-shrink-0 bg-gradient-to-br from-[#5D737E]/10 to-transparent rounded-xl overflow-hidden">
@@ -199,10 +225,16 @@ export default function Header() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-normal text-[#02111B] truncate tracking-tight">{product.name}</p>
+                  <p className="text-sm font-normal text-[#02111B] truncate tracking-tight">
+                    {product.name}
+                  </p>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-[#5D737E] font-light">{product.code}</span>
-                    <span className="text-xs font-semibold text-[#02111B] tracking-tight">₮{product.price.toLocaleString()}</span>
+                    <span className="text-xs text-[#5D737E] font-light">
+                      {product.code}
+                    </span>
+                    <span className="text-xs font-semibold text-[#02111B] tracking-tight">
+                      ₮{product.price.toLocaleString()}
+                    </span>
                   </div>
                 </div>
               </button>
@@ -210,12 +242,14 @@ export default function Header() {
           })}
         </div>
       ) : (
-        <div className="p-5 text-center text-[#5D737E] text-sm font-light">Илэрц олдсонгүй</div>
+        <div className="p-5 text-center text-[#5D737E] text-sm font-light">
+          Илэрц олдсонгүй
+        </div>
       )}
     </div>
   ) : null;
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === "admin";
 
   return (
     <>
@@ -242,11 +276,18 @@ export default function Header() {
                   className="lg:hidden text-[#02111B] p-1"
                   aria-label="Toggle menu"
                 >
-                  {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                  {mobileMenuOpen ? (
+                    <X className="w-6 h-6" />
+                  ) : (
+                    <Menu className="w-6 h-6" />
+                  )}
                 </button>
               )}
 
-              <Link href="/" className="font-semibold text-[#02111B] tracking-tight text-xl">
+              <Link
+                href="/"
+                className="font-semibold text-[#02111B] tracking-tight text-xl"
+              >
                 Az
               </Link>
 
@@ -258,10 +299,10 @@ export default function Header() {
                       key={item.href}
                       href={item.href}
                       className={cn(
-                        'transition-colors font-light tracking-wide text-sm',
+                        "transition-colors font-light tracking-wide text-sm",
                         pathname === item.href
-                          ? 'text-[#02111B] font-normal'
-                          : 'text-[#5D737E] hover:text-[#02111B]'
+                          ? "text-[#02111B] font-normal"
+                          : "text-[#5D737E] hover:text-[#02111B]",
                       )}
                     >
                       {item.label}
@@ -273,8 +314,10 @@ export default function Header() {
                   <Link
                     href="/"
                     className={cn(
-                      'transition-colors font-light tracking-wide text-sm',
-                      pathname === '/' ? 'text-[#02111B] font-normal' : 'text-[#5D737E] hover:text-[#02111B]'
+                      "transition-colors font-light tracking-wide text-sm",
+                      pathname === "/"
+                        ? "text-[#02111B] font-normal"
+                        : "text-[#5D737E] hover:text-[#02111B]",
                     )}
                   >
                     Бүтээгдэхүүн
@@ -282,8 +325,10 @@ export default function Header() {
                   <Link
                     href="/products"
                     className={cn(
-                      'transition-colors font-light tracking-wide text-sm',
-                      pathname?.startsWith('/products') ? 'text-[#02111B] font-normal' : 'text-[#5D737E] hover:text-[#02111B]'
+                      "transition-colors font-light tracking-wide text-sm",
+                      pathname?.startsWith("/products")
+                        ? "text-[#02111B] font-normal"
+                        : "text-[#5D737E] hover:text-[#02111B]",
                     )}
                   >
                     Ангилал
@@ -310,7 +355,10 @@ export default function Header() {
                     />
                     {searchQuery && (
                       <button
-                        onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
+                        onClick={() => {
+                          setSearchQuery("");
+                          searchInputRef.current?.focus();
+                        }}
                         className="p-0.5 hover:bg-[#5D737E]/10 rounded-full transition-colors"
                       >
                         <X className="w-3.5 h-3.5 text-[#5D737E]" />
@@ -327,7 +375,10 @@ export default function Header() {
                   onClick={() => {
                     setSearchFocused(true);
                     // Focus mobile input after render
-                    setTimeout(() => mobileSearchInputRef.current?.focus(), 100);
+                    setTimeout(
+                      () => mobileSearchInputRef.current?.focus(),
+                      100,
+                    );
                   }}
                   className="sm:hidden p-2 hover:bg-white rounded-full transition-colors"
                 >
@@ -407,8 +458,10 @@ export default function Header() {
                   href="/"
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    'text-sm font-light tracking-wide transition-colors py-1',
-                    pathname === '/' ? 'text-[#02111B] font-normal' : 'text-[#5D737E]'
+                    "text-sm font-light tracking-wide transition-colors py-1",
+                    pathname === "/"
+                      ? "text-[#02111B] font-normal"
+                      : "text-[#5D737E]",
                   )}
                 >
                   Бүтээгдэхүүн
@@ -417,8 +470,10 @@ export default function Header() {
                   href="/products"
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    'text-sm font-light tracking-wide transition-colors py-1',
-                    pathname?.startsWith('/products') ? 'text-[#02111B] font-normal' : 'text-[#5D737E]'
+                    "text-sm font-light tracking-wide transition-colors py-1",
+                    pathname?.startsWith("/products")
+                      ? "text-[#02111B] font-normal"
+                      : "text-[#5D737E]",
                   )}
                 >
                   Ангилал
@@ -444,7 +499,10 @@ export default function Header() {
                   autoFocus
                 />
                 <button
-                  onClick={() => { setSearchQuery(''); setSearchFocused(false); }}
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSearchFocused(false);
+                  }}
                   className="p-1 hover:bg-[#5D737E]/10 rounded-full transition-colors"
                 >
                   <X className="w-4 h-4 text-[#5D737E]" />
@@ -466,7 +524,9 @@ export default function Header() {
           <aside className="fixed top-0 right-0 h-full w-72 bg-[#FCFCFC] z-50 shadow-2xl lg:hidden transition-transform duration-300 ease-in-out">
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between p-4 border-b border-[#02111B]/5">
-                <h2 className="text-sm font-medium text-[#02111B] tracking-tight">Цэс</h2>
+                <h2 className="text-sm font-medium text-[#02111B] tracking-tight">
+                  Цэс
+                </h2>
                 <button
                   onClick={() => setMobileMenuOpen(false)}
                   className="p-1.5 hover:bg-[#5D737E]/10 rounded-full transition-colors"
@@ -483,10 +543,10 @@ export default function Header() {
                       href={item.href}
                       onClick={() => setMobileMenuOpen(false)}
                       className={cn(
-                        'block px-4 py-2.5 text-sm rounded-xl transition-colors font-light tracking-wide',
+                        "block px-4 py-2.5 text-sm rounded-xl transition-colors font-light tracking-wide",
                         pathname === item.href
-                          ? 'bg-[#02111B] text-white font-normal'
-                          : 'text-[#3F4045] hover:bg-[#5D737E]/10'
+                          ? "bg-[#02111B] text-white font-normal"
+                          : "text-[#3F4045] hover:bg-[#5D737E]/10",
                       )}
                     >
                       {item.label}

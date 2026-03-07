@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import { getImageUrl } from '@/lib/image-utils';
@@ -74,6 +74,8 @@ export default function AdminOrdersPage() {
   const [endDate, setEndDate] = useState(todayFormatted);
   const [searchInput, setSearchInput] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState<'range' | 'all' | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -108,6 +110,24 @@ export default function AdminOrdersPage() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchInput]);
+
+  const displayedOrders = useMemo(() => {
+    const query = searchInput.trim().replace(/\s+/g, '');
+    if (!query) return orders;
+
+    const isLikelyFullPhone = /^\d{8,}$/.test(query);
+
+    return orders.filter((order) => {
+      const orderCode = (order.orderCode || '').toString().replace(/\s+/g, '');
+      const phone = ((order.user?.phoneNumber || order.phoneNumber || '') as string).replace(/\s+/g, '');
+
+      if (isLikelyFullPhone) {
+        return phone === query;
+      }
+
+      return orderCode.startsWith(query) || phone.startsWith(query);
+    });
+  }, [orders, searchInput]);
 
   const fetchOrders = useCallback(async ({ showErrorToast = true }: { showErrorToast?: boolean } = {}) => {
     try {
@@ -176,6 +196,99 @@ export default function AdminOrdersPage() {
         description: error.response?.data?.message || 'Алдаа гарлаа',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    const confirmed = window.confirm('Энэ захиалгыг устгахдаа итгэлтэй байна уу?');
+    if (!confirmed) return;
+
+    try {
+      setDeletingOrderId(orderId);
+      const response = await api.delete(`/admin/orders/${orderId}`);
+      toast({
+        title: 'Амжилттай',
+        description: response.data?.message || 'Захиалга устгагдлаа',
+      });
+      if (selectedOrder?._id === orderId) {
+        setIsDetailsOpen(false);
+        setSelectedOrder(null);
+      }
+      await fetchOrders({ showErrorToast: false });
+    } catch (error: any) {
+      toast({
+        title: 'Алдаа',
+        description: error.response?.data?.message || 'Захиалга устгахад алдаа гарлаа',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingOrderId(null);
+    }
+  };
+
+  const handleDeleteRangeHistory = async () => {
+    const confirmed = window.confirm(
+      `Сонгосон хугацааны (${startDate} - ${endDate}) захиалгын түүхийг устгахдаа итгэлтэй байна уу?`
+    );
+    if (!confirmed) return;
+
+    try {
+      setBulkDeleting('range');
+      const response = await api.delete('/admin/orders', {
+        data: {
+          mode: 'range',
+          startDate,
+          endDate,
+        },
+      });
+      toast({
+        title: 'Амжилттай',
+        description:
+          response.data?.deletedCount > 0
+            ? `${response.data.deletedCount} захиалга устгагдлаа`
+            : 'Устгах захиалга олдсонгүй',
+      });
+      await fetchOrders({ showErrorToast: false });
+    } catch (error: any) {
+      toast({
+        title: 'Алдаа',
+        description: error.response?.data?.message || 'Сонгосон хугацааны түүх устгахад алдаа гарлаа',
+        variant: 'destructive',
+      });
+    } finally {
+      setBulkDeleting(null);
+    }
+  };
+
+  const handleDeleteAllHistory = async () => {
+    const confirmed = window.confirm('БҮХ захиалгын түүхийг устгахдаа итгэлтэй байна уу? Энэ үйлдлийг буцаах боломжгүй.');
+    if (!confirmed) return;
+
+    try {
+      setBulkDeleting('all');
+      const response = await api.delete('/admin/orders', {
+        data: {
+          mode: 'all',
+        },
+      });
+      toast({
+        title: 'Амжилттай',
+        description:
+          response.data?.deletedCount > 0
+            ? `${response.data.deletedCount} захиалга устгагдлаа`
+            : 'Устгах захиалга олдсонгүй',
+      });
+      setIsDetailsOpen(false);
+      setSelectedOrder(null);
+      await fetchOrders({ showErrorToast: false });
+    } catch (error: any) {
+      toast({
+        title: 'Алдаа',
+        description: error.response?.data?.message || 'Бүх түүх устгахад алдаа гарлаа',
+        variant: 'destructive',
+      });
+    } finally {
+      setBulkDeleting(null);
     }
   };
 
@@ -288,6 +401,24 @@ export default function AdminOrdersPage() {
                 >
                   1 сар
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDeleteRangeHistory}
+                  disabled={bulkDeleting !== null}
+                  className="text-xs md:text-sm whitespace-nowrap border-red-300 text-red-600 hover:bg-red-50"
+                >
+                  {bulkDeleting === 'range' ? 'Устгаж байна...' : 'Хугацаагаар түүх устгах'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDeleteAllHistory}
+                  disabled={bulkDeleting !== null}
+                  className="text-xs md:text-sm whitespace-nowrap border-red-500 text-red-700 hover:bg-red-50"
+                >
+                  {bulkDeleting === 'all' ? 'Устгаж байна...' : 'Бүх түүх устгах'}
+                </Button>
               </div>
             </div>
           </div>
@@ -299,11 +430,11 @@ export default function AdminOrdersPage() {
           <Card>
             <CardHeader className="p-3 md:p-6">
               <CardTitle className="text-base md:text-lg font-semibold md:font-bold">
-                Захиалгууд ({orders.length})
+                Захиалгууд ({displayedOrders.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="p-3 md:p-6">
-              {orders.length === 0 ? (
+              {displayedOrders.length === 0 ? (
                 <div className="text-center py-8 md:py-12 text-sm md:text-base text-gray-500">
                   Захиалга олдсонгүй
                 </div>
@@ -322,7 +453,7 @@ export default function AdminOrdersPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {orders.map((order, index) => (
+                      {displayedOrders.map((order, index) => (
                         <tr key={order._id} className="border-b hover:bg-gray-50">
                           <td className="py-2 px-2 md:py-3 md:px-4">{index + 1}</td>
                           <td className="py-2 px-2 md:py-3 md:px-4 font-medium">
@@ -531,6 +662,16 @@ export default function AdminOrdersPage() {
                     <p className="text-lg font-semibold">Нийт дүн:</p>
                     <p className="text-xl font-bold">₮{(selectedOrder.total || 0).toLocaleString()}</p>
                   </div>
+                </div>
+                <div className="border-t pt-4 flex justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleDeleteOrder(selectedOrder._id)}
+                    disabled={deletingOrderId === selectedOrder._id}
+                    className="border-red-500 text-red-700 hover:bg-red-50"
+                  >
+                    {deletingOrderId === selectedOrder._id ? 'Устгаж байна...' : 'Энэ захиалгыг устгах'}
+                  </Button>
                 </div>
                   </div>
                 )}

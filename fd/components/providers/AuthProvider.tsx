@@ -47,10 +47,17 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             // Temporary network timeout - keep local auth state
             return;
           }
-          // Invalid token or unauthorized response, clear it
-          localStorage.removeItem('token');
-          setToken(null);
-          setUser(null);
+          const status = error?.response?.status;
+          const isAuthError = status === 401 || status === 403;
+          if (isAuthError) {
+            // Only clear auth on explicit unauthorized responses.
+            localStorage.removeItem('token');
+            setToken(null);
+            setUser(null);
+            return;
+          }
+          // For 5xx/network/cors glitches, keep current auth state.
+          console.error('Auth initialization skipped due to non-auth error:', error?.message || error);
         }
       }
     };

@@ -67,9 +67,9 @@ function ProductsContent() {
         setLoading(true);
         let response;
         if (selectedCategoryId) {
-          response = await api.get(`/products/category/${selectedCategoryId}`);
+          response = await api.get(`/products/category/${selectedCategoryId}?page=1&limit=100`);
         } else {
-          response = await api.get('/products');
+          response = await api.get('/products?page=1&limit=100');
         }
         setProducts(response.data.products || []);
       } catch (error) {

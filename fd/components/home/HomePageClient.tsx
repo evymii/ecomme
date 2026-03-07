@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import ProductCard from '@/components/products/ProductCard';
@@ -37,6 +37,13 @@ interface HomePageClientProps {
     featuredProducts: Product[];
     discountedProducts: Product[];
     allProducts: Product[];
+    allProductsPagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasMore: boolean;
+    };
     categories: Category[];
   };
 }
@@ -47,10 +54,14 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
   const [allProducts, setAllProducts] = useState<Product[]>(initialData.allProducts || []);
   const [categories] = useState<Category[]>(initialData.categories || []);
   const [selectedCategory, setSelectedCategory] = useState<string>('Бүгд');
+  const [currentPage, setCurrentPage] = useState<number>(initialData.allProductsPagination?.page || 1);
+  const [hasMoreProducts, setHasMoreProducts] = useState<boolean>(initialData.allProductsPagination?.hasMore || false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const showLoader = useDelayedLoading(loading, 250);
   const user = useAuthStore((state) => state.user);
   const router = useRouter();
+  const loadMoreTriggerRef = useRef<HTMLDivElement | null>(null);
 
   // Redirect admin users to admin pages
   const userRole = user?.role;
@@ -64,6 +75,8 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
     setSelectedCategory(categoryName);
     if (categoryName === 'Бүгд') {
       setAllProducts(initialData.allProducts || []);
+      setCurrentPage(initialData.allProductsPagination?.page || 1);
+      setHasMoreProducts(initialData.allProductsPagination?.hasMore || false);
       return;
     }
 
@@ -72,15 +85,66 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
 
     try {
       setLoading(true);
-      const response = await api.get(`/products/category/${category._id}`);
+      const response = await api.get(`/products/category/${category._id}?page=1&limit=100`);
       setAllProducts(response.data.products || []);
+      setCurrentPage(1);
+      setHasMoreProducts(false);
     } catch (error) {
       console.error('Error fetching category products:', error);
       setAllProducts([]);
+      setCurrentPage(1);
+      setHasMoreProducts(false);
     } finally {
       setLoading(false);
     }
   };
+
+  const loadMoreProducts = async () => {
+    if (selectedCategory !== 'Бүгд') return;
+    if (loadingMore || !hasMoreProducts) return;
+    try {
+      setLoadingMore(true);
+      const nextPage = currentPage + 1;
+      const response = await api.get(`/products?page=${nextPage}&limit=12`);
+      const nextProducts = response.data?.products || [];
+      const hasMore = !!response.data?.pagination?.hasMore;
+      setAllProducts((prev) => {
+        const seen = new Set(prev.map((p) => p._id));
+        const merged = [...prev];
+        for (const product of nextProducts) {
+          if (!seen.has(product._id)) {
+            merged.push(product);
+          }
+        }
+        return merged;
+      });
+      setCurrentPage(nextPage);
+      setHasMoreProducts(hasMore);
+    } catch (error) {
+      console.error('Error loading more products:', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedCategory !== 'Бүгд') return;
+    if (!hasMoreProducts) return;
+    const target = loadMoreTriggerRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first?.isIntersecting) {
+          loadMoreProducts();
+        }
+      },
+      { rootMargin: '300px 0px' }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [selectedCategory, hasMoreProducts, currentPage, loadingMore]);
 
   const [activeCategoryIndex, setActiveCategoryIndex] = useState(0);
 
@@ -91,6 +155,16 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
     }, 2500);
     return () => clearInterval(interval);
   }, [categories.length]);
+
+  const rotatingCategoryWidthStyle = useMemo(() => {
+    const longestCategoryLength = categories.reduce((max, cat) => Math.max(max, cat.name.length), 0);
+    // +6 for icon/padding so long names don't get clipped in the animated badge.
+    const widthInCh = Math.max(12, Math.min(34, longestCategoryLength + 6));
+    return {
+      width: `${widthInCh}ch`,
+      maxWidth: '70vw',
+    } as const;
+  }, [categories]);
 
   const categoryNames = ['Бүгд', ...categories.map((c) => c.name)];
 
@@ -122,7 +196,7 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
             </div>
 
             {categories.length > 0 ? (
-              <div className="relative flex-shrink-0 h-9 w-28 sm:w-32 overflow-hidden">
+              <div className="relative flex-shrink-0 h-10 overflow-hidden" style={rotatingCategoryWidthStyle}>
                 {categories.map((cat, i) => (
                   <div
                     key={cat._id}
@@ -139,7 +213,7 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
                   >
                     <button
                       onClick={() => handleCategoryFilter(cat.name)}
-                      className="inline-flex items-center gap-2 px-4 py-2 border border-[#02111B]/10 rounded-full hover:bg-[#02111B]/5 transition-colors"
+                      className="inline-flex w-full h-10 items-center justify-center gap-2 px-4 border border-[#02111B]/10 rounded-full hover:bg-[#02111B]/5 transition-colors"
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-[#02111B]" />
                       <span className="text-sm text-[#02111B] font-medium tracking-tight whitespace-nowrap">{cat.name}</span>
@@ -148,7 +222,7 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
                 ))}
               </div>
             ) : (
-              <div className="w-28 sm:w-32" />
+              <div className="w-32" />
             )}
           </div>
         </div>
@@ -215,11 +289,22 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
       <section className="pb-16 md:pb-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {allProducts.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
-              {allProducts.map((product) => (
-                <ProductCard key={product._id} product={product} />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
+                {allProducts.map((product) => (
+                  <ProductCard key={product._id} product={product} />
+                ))}
+              </div>
+              {selectedCategory === 'Бүгд' && (
+                <div ref={loadMoreTriggerRef} className="h-10 mt-6 flex items-center justify-center">
+                  {loadingMore ? (
+                    <span className="text-sm text-[#5D737E] font-light">Илүү бүтээгдэхүүн ачаалж байна...</span>
+                  ) : hasMoreProducts ? (
+                    <span className="text-xs text-[#5D737E] font-light">Доош гүйлгэж үргэлжлүүлэн ачаална</span>
+                  ) : null}
+                </div>
+              )}
+            </>
           ) : loading ? (
             showLoader ? <PageLoader /> : null
           ) : (
