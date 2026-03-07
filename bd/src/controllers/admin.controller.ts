@@ -448,28 +448,56 @@ export const deleteProduct = async (req: Request, res: Response): Promise<void> 
 
 export const getAllOrders = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { startDate, endDate } = req.query;
-    let query: any = {};
+    const { startDate, endDate, orderCode, phoneNumber } = req.query;
+    const andConditions: any[] = [];
+    const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const createdAtFilter: any = {};
 
     if (startDate || endDate) {
-      query.createdAt = {};
       if (startDate) {
         // Set to start of day (00:00:00.000) in local timezone
         const start = new Date(startDate as string);
         start.setHours(0, 0, 0, 0);
-        query.createdAt.$gte = start;
+        createdAtFilter.$gte = start;
       }
       if (endDate) {
         // Set to end of day (23:59:59.999) in local timezone to include all orders on that day
         const end = new Date(endDate as string);
         end.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = end;
+        createdAtFilter.$lte = end;
       }
+      andConditions.push({ createdAt: createdAtFilter });
     }
 
+    const orderCodeQuery = typeof orderCode === 'string' ? orderCode.trim() : '';
+    if (orderCodeQuery) {
+      andConditions.push({
+        orderCode: { $regex: escapeRegex(orderCodeQuery), $options: 'i' },
+      });
+    }
+
+    const phoneQuery = typeof phoneNumber === 'string' ? phoneNumber.trim() : '';
+    if (phoneQuery) {
+      const phoneRegex = new RegExp(escapeRegex(phoneQuery), 'i');
+      const matchedUsers = await User.find({ phoneNumber: { $regex: phoneRegex } })
+        .select('_id')
+        .limit(100)
+        .lean();
+      const matchedUserIds = matchedUsers.map((u: any) => u._id);
+
+      const phoneConditions: any[] = [{ phoneNumber: { $regex: phoneRegex } }];
+      if (matchedUserIds.length > 0) {
+        phoneConditions.push({ user: { $in: matchedUserIds } });
+      }
+      andConditions.push({ $or: phoneConditions });
+    }
+
+    const query = andConditions.length > 0 ? { $and: andConditions } : {};
+
     console.log('📋 Fetching orders for admin with query:', query);
-    if (startDate) console.log('📅 Start date:', query.createdAt.$gte);
-    if (endDate) console.log('📅 End date:', query.createdAt.$lte);
+    if (startDate && createdAtFilter.$gte) console.log('📅 Start date:', createdAtFilter.$gte);
+    if (endDate && createdAtFilter.$lte) console.log('📅 End date:', createdAtFilter.$lte);
 
     // Optimize: use lean() and select only needed fields for faster queries
     // Use select() on populate to reduce data transfer
