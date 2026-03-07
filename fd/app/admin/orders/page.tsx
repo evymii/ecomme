@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import OrderReceipt from '@/components/admin/OrderReceipt';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
 import { useAuthStore } from '@/store/auth-store';
+import { useRouter } from 'next/navigation';
 
 interface Order {
   _id: string;
@@ -38,8 +39,16 @@ interface Order {
   deliveryAddress: {
     address: string;
     additionalInfo?: string;
-  };
+  } | string;
   paymentMethod?: string;
+  payment?: {
+    method?: string;
+    paymentMethod?: string;
+  };
+  address?: {
+    deliveryAddress?: string;
+    additionalInfo?: string;
+  } | string;
   orderCode?: string;
   status: string;
   createdAt: string;
@@ -69,6 +78,7 @@ export default function AdminOrdersPage() {
   const { isAdmin, isChecking } = useAdminAuth();
   const { toast } = useToast();
   const logout = useAuthStore((state) => state.logout);
+  const router = useRouter();
 
   // Set date range helper functions
   const setDateRange = (start: Date, end: Date) => {
@@ -132,7 +142,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, toast]);
+  }, [startDate, endDate, toast, logout, router]);
 
   useEffect(() => {
     if (isAdmin && !isChecking) {
@@ -183,6 +193,29 @@ export default function AdminOrdersPage() {
       bank_transfer: 'Банкны шилжүүлэг',
     };
     return labels[method || ''] || method || '-';
+  };
+
+  const getOrderPaymentMethod = (order: Order) => {
+    return order.paymentMethod || order.payment?.method || order.payment?.paymentMethod;
+  };
+
+  const getOrderDeliveryAddress = (order: Order) => {
+    if (!order.deliveryAddress) return '-';
+    if (typeof order.deliveryAddress === 'string') return order.deliveryAddress;
+    if (order.deliveryAddress.address) return order.deliveryAddress.address;
+    if (typeof order.address === 'string') return order.address;
+    if (order.address?.deliveryAddress) return order.address.deliveryAddress;
+    return '-';
+  };
+
+  const getOrderAddressAdditionalInfo = (order: Order) => {
+    if (typeof order.deliveryAddress === 'object' && order.deliveryAddress?.additionalInfo) {
+      return order.deliveryAddress.additionalInfo;
+    }
+    if (typeof order.address === 'object' && order.address?.additionalInfo) {
+      return order.address.additionalInfo;
+    }
+    return '';
   };
 
   if (isChecking) {
@@ -384,7 +417,7 @@ export default function AdminOrdersPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Төлбөрийн хэлбэр</p>
-                    <p className="text-base">{getPaymentMethodLabel(selectedOrder.paymentMethod)}</p>
+                    <p className="text-base">{getPaymentMethodLabel(getOrderPaymentMethod(selectedOrder))}</p>
                   </div>
                 </div>
 
@@ -412,10 +445,10 @@ export default function AdminOrdersPage() {
                 {/* Delivery Address */}
                 <div className="border-t pt-4">
                   <h3 className="font-semibold mb-3">Хүргэлтийн хаяг</h3>
-                  <p className="text-base">{selectedOrder.deliveryAddress?.address || '-'}</p>
-                  {selectedOrder.deliveryAddress?.additionalInfo && (
+                  <p className="text-base">{getOrderDeliveryAddress(selectedOrder)}</p>
+                  {getOrderAddressAdditionalInfo(selectedOrder) && (
                     <p className="text-sm text-gray-600 mt-2">
-                      Нэмэлт: {selectedOrder.deliveryAddress.additionalInfo}
+                      Нэмэлт: {getOrderAddressAdditionalInfo(selectedOrder)}
                     </p>
                   )}
                 </div>

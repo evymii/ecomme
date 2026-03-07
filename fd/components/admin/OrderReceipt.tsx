@@ -26,8 +26,16 @@ interface Order {
   deliveryAddress: {
     address: string;
     additionalInfo?: string;
-  };
+  } | string;
   paymentMethod?: string;
+  payment?: {
+    method?: string;
+    paymentMethod?: string;
+  };
+  address?: {
+    deliveryAddress?: string;
+    additionalInfo?: string;
+  } | string;
   orderCode?: string;
   status: string;
   createdAt: string;
@@ -39,6 +47,15 @@ interface OrderReceiptProps {
 
 export default function OrderReceipt({ order }: OrderReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
+
+  const getOrderDeliveryAddress = () => {
+    if (!order.deliveryAddress) return '-';
+    if (typeof order.deliveryAddress === 'string') return order.deliveryAddress;
+    if (order.deliveryAddress.address) return order.deliveryAddress.address;
+    if (typeof order.address === 'string') return order.address;
+    if (order.address?.deliveryAddress) return order.address.deliveryAddress;
+    return '-';
+  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -230,7 +247,7 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
           <div style={{ marginTop: '10px' }}>
             <div style={{ fontSize: '10px', marginBottom: '3px' }}>(тээвэрлэгчийн хаяг, албан тушаал, нэр)</div>
             <div style={{ borderBottom: '1px solid #000', paddingBottom: '2px', minHeight: '18px' }}>
-              {order.deliveryAddress?.address || '-'}
+              {getOrderDeliveryAddress()}
             </div>
           </div>
         </div>
