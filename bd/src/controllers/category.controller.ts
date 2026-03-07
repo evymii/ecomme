@@ -1,9 +1,53 @@
 import { Request, Response } from 'express';
 import Category from '../models/Category.model.js';
 
+type CacheEntry = {
+  expiresAt: number;
+  data: any;
+};
+
+const CACHE_TTL_MS = 60 * 1000;
+const categoryCache = new Map<string, CacheEntry>();
+
+function getCached<T>(key: string): T | null {
+  const hit = categoryCache.get(key);
+  if (!hit) return null;
+  if (hit.expiresAt < Date.now()) {
+    categoryCache.delete(key);
+    return null;
+  }
+  return hit.data as T;
+}
+
+function setCached(key: string, data: any, ttlMs = CACHE_TTL_MS) {
+  categoryCache.set(key, { data, expiresAt: Date.now() + ttlMs });
+}
+
+function clearCategoryCache() {
+  categoryCache.clear();
+}
+
 export const getAllCategories = async (req: Request, res: Response): Promise<void> => {
   try {
-    const categories = await Category.find({ isActive: true }).sort({ name: 1 });
+    const cacheKey = 'categories:active';
+    const cachedCategories = getCached<any[]>(cacheKey);
+
+    if (cachedCategories) {
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
+      res.setHeader('X-Cache', 'HIT');
+      res.json({ success: true, categories: cachedCategories });
+      return;
+    }
+
+    const categories = await Category.find({ isActive: true })
+      .select('name nameEn description isActive createdAt')
+      .sort({ name: 1 })
+      .lean()
+      .maxTimeMS(4000);
+
+    setCached(cacheKey, categories);
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
+    res.setHeader('X-Cache', 'MISS');
     res.json({ success: true, categories });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -34,6 +78,7 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
     });
 
     await category.save();
+    clearCategoryCache();
 
     res.status(201).json({
       success: true,
@@ -75,6 +120,7 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
     if (isActive !== undefined) category.isActive = isActive;
 
     await category.save();
+    clearCategoryCache();
 
     res.json({
       success: true,
@@ -100,6 +146,7 @@ export const deleteCategory = async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    clearCategoryCache();
     res.json({ success: true, message: 'Ангилал амжилттай устгалаа' });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

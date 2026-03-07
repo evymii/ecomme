@@ -474,18 +474,43 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
     // Optimize: use lean() and select only needed fields for faster queries
     // Use select() on populate to reduce data transfer
     const orders = await Order.find(query)
-      .select('orderCode items total status createdAt phoneNumber email customerName user')
+      .select('orderCode items total status createdAt phoneNumber email customerName user deliveryAddress paymentMethod address payment')
       .populate('user', 'name phoneNumber email')
       .populate('items.product', 'name price code')
       .sort({ createdAt: -1 })
       .limit(500) // Limit orders to prevent huge responses
       .lean();
 
-    console.log(`✅ Found ${orders.length} orders for admin`);
+    // Normalize legacy documents so admin UI always receives these fields.
+    const normalizedOrders = orders.map((order: any) => {
+      const normalizedDeliveryAddress = order.deliveryAddress?.address
+        ? order.deliveryAddress
+        : typeof order.deliveryAddress === 'string'
+          ? { address: order.deliveryAddress }
+          : typeof order.address === 'string'
+            ? { address: order.address }
+            : order.address?.deliveryAddress
+              ? { address: order.address.deliveryAddress, additionalInfo: order.address.additionalInfo || '' }
+              : undefined;
+
+      const normalizedPaymentMethod =
+        order.paymentMethod ||
+        order.payment?.method ||
+        order.payment?.paymentMethod ||
+        'pay_later';
+
+      return {
+        ...order,
+        deliveryAddress: normalizedDeliveryAddress,
+        paymentMethod: normalizedPaymentMethod,
+      };
+    });
+
+    console.log(`✅ Found ${normalizedOrders.length} orders for admin`);
 
     // Set cache headers
     res.setHeader('Cache-Control', 'private, max-age=10');
-    res.json({ success: true, orders });
+    res.json({ success: true, orders: normalizedOrders });
   } catch (error: any) {
     console.error('❌ Error fetching orders for admin:', error);
     res.status(500).json({ success: false, message: error.message });

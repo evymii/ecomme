@@ -2,18 +2,52 @@ import { Request, Response } from 'express';
 import Product from '../models/Product.model.js';
 import Category from '../models/Category.model.js';
 
+type CacheEntry = {
+  expiresAt: number;
+  data: any;
+};
+
+const CACHE_TTL_MS = 45 * 1000;
+const productCache = new Map<string, CacheEntry>();
+
+function getCached<T>(key: string): T | null {
+  const hit = productCache.get(key);
+  if (!hit) return null;
+  if (hit.expiresAt < Date.now()) {
+    productCache.delete(key);
+    return null;
+  }
+  return hit.data as T;
+}
+
+function setCached(key: string, data: any, ttlMs = CACHE_TTL_MS) {
+  productCache.set(key, { data, expiresAt: Date.now() + ttlMs });
+}
+
 export const getAllProducts = async (req: Request, res: Response): Promise<void> => {
   try {
+    const cacheKey = 'products:all';
+    const cachedProducts = getCached<any[]>(cacheKey);
+    if (cachedProducts) {
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
+      res.setHeader('X-Cache', 'HIT');
+      res.json({ success: true, products: cachedProducts });
+      return;
+    }
+
     // Optimize: use lean() for faster queries and select only needed fields
     const products = await Product.find()
       .select('name price images features stock category createdAt code')
       .slice('images', 1)
       .sort({ createdAt: -1 })
       .limit(100) // Limit results for better performance
-      .lean();
+      .lean()
+      .maxTimeMS(5000);
     
     // Set cache headers
-    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120');
+    setCached(cacheKey, products);
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
+    res.setHeader('X-Cache', 'MISS');
     res.json({ success: true, products });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -69,16 +103,28 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
       categoryName = decodedCategory;
     }
     
+    const cacheKey = `products:category:${categoryName}`;
+    const cachedProducts = getCached<any[]>(cacheKey);
+    if (cachedProducts) {
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
+      res.setHeader('X-Cache', 'HIT');
+      res.json({ success: true, products: cachedProducts });
+      return;
+    }
+
     // Optimize: use lean() and select only needed fields
     const products = await Product.find({ category: categoryName })
       .select('name price images features stock category createdAt code')
       .slice('images', 1)
       .sort({ createdAt: -1 })
       .limit(100) // Limit results
-      .lean();
+      .lean()
+      .maxTimeMS(5000);
     
     // Set cache headers
-    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120');
+    setCached(cacheKey, products);
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
+    res.setHeader('X-Cache', 'MISS');
     res.json({ success: true, products });
   } catch (error: any) {
     console.error('Error fetching products by category:', error);
@@ -88,6 +134,15 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
 
 export const getFeaturedProducts = async (req: Request, res: Response): Promise<void> => {
   try {
+    const cacheKey = 'products:featured';
+    const cachedProducts = getCached<any[]>(cacheKey);
+    if (cachedProducts) {
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
+      res.setHeader('X-Cache', 'HIT');
+      res.json({ success: true, products: cachedProducts });
+      return;
+    }
+
     // Optimize: use lean() and select only needed fields
     const products = await Product.find({
       $or: [
@@ -99,10 +154,13 @@ export const getFeaturedProducts = async (req: Request, res: Response): Promise<
       .slice('images', 1)
       .sort({ createdAt: -1 })
       .limit(10)
-      .lean();
+      .lean()
+      .maxTimeMS(5000);
     
     // Set cache headers
-    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120');
+    setCached(cacheKey, products);
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
+    res.setHeader('X-Cache', 'MISS');
     res.json({ success: true, products });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -111,16 +169,28 @@ export const getFeaturedProducts = async (req: Request, res: Response): Promise<
 
 export const getDiscountedProducts = async (req: Request, res: Response): Promise<void> => {
   try {
+    const cacheKey = 'products:discounted';
+    const cachedProducts = getCached<any[]>(cacheKey);
+    if (cachedProducts) {
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
+      res.setHeader('X-Cache', 'HIT');
+      res.json({ success: true, products: cachedProducts });
+      return;
+    }
+
     // Optimize: use lean() and select only needed fields
     const products = await Product.find({ 'features.isDiscounted': true })
       .select('name price images features stock category createdAt code')
       .slice('images', 1)
       .sort({ createdAt: -1 })
       .limit(10)
-      .lean();
+      .lean()
+      .maxTimeMS(5000);
     
     // Set cache headers
-    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120');
+    setCached(cacheKey, products);
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
+    res.setHeader('X-Cache', 'MISS');
     res.json({ success: true, products });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -144,6 +214,14 @@ export const searchProducts = async (req: Request, res: Response): Promise<void>
     
     const searchQuery = q.trim();
     const escapedQuery = escapeRegex(searchQuery);
+    const cacheKey = `products:search:${escapedQuery.toLowerCase()}`;
+    const cachedProducts = getCached<any[]>(cacheKey);
+    if (cachedProducts) {
+      res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=30');
+      res.setHeader('X-Cache', 'HIT');
+      res.json({ success: true, products: cachedProducts });
+      return;
+    }
     
     // Search by name (supports Mongolian and English) or product code
     // Using regex for partial matching, case-insensitive
@@ -157,8 +235,12 @@ export const searchProducts = async (req: Request, res: Response): Promise<void>
       .slice('images', 1)
       .sort({ createdAt: -1 })
       .limit(20)
-      .lean();
-    
+      .lean()
+      .maxTimeMS(5000);
+
+    setCached(cacheKey, products, 30 * 1000);
+    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=30');
+    res.setHeader('X-Cache', 'MISS');
     res.json({ success: true, products });
   } catch (error: any) {
     console.error('Search error:', error);
