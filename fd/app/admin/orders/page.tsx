@@ -255,12 +255,8 @@ export default function AdminOrdersPage() {
     try {
       setBulkDeleting('range');
       const response = await api.delete('/admin/orders', {
+        timeout: 30000,
         params: {
-          mode: 'range',
-          startDate,
-          endDate,
-        },
-        data: {
           mode: 'range',
           startDate,
           endDate,
@@ -292,10 +288,8 @@ export default function AdminOrdersPage() {
     try {
       setBulkDeleting('all');
       const response = await api.delete('/admin/orders', {
+        timeout: 30000,
         params: {
-          mode: 'all',
-        },
-        data: {
           mode: 'all',
         },
       });
@@ -407,9 +401,12 @@ export default function AdminOrdersPage() {
 
           <div className="w-full md:w-[420px] lg:w-[460px]">
             <Input
+              id="admin-order-search"
+              name="adminOrderSearch"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Захиалгын код эсвэл утасны дугаар..."
+              autoComplete="off"
               className="w-full text-xs md:text-sm"
             />
           </div>
@@ -418,16 +415,22 @@ export default function AdminOrdersPage() {
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
               <div className="flex gap-2 items-center">
                 <Input
+                  id="admin-order-start-date"
+                  name="adminOrderStartDate"
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
+                  autoComplete="off"
                   className="w-32 md:w-36 text-xs md:text-sm"
                 />
                 <span className="text-sm text-gray-600">-</span>
                 <Input
+                  id="admin-order-end-date"
+                  name="adminOrderEndDate"
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
+                  autoComplete="off"
                   className="w-32 md:w-36 text-xs md:text-sm"
                 />
               </div>
