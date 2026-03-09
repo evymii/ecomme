@@ -73,7 +73,7 @@ export default function AdminOrdersPage() {
   const [searchInput, setSearchInput] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
-  const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState<'range' | 'all' | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -125,6 +125,11 @@ export default function AdminOrdersPage() {
       return orderCode.startsWith(query) || phone.startsWith(query);
     });
   }, [orders, searchInput]);
+
+  useEffect(() => {
+    const visibleIds = new Set(displayedOrders.map((order) => order._id));
+    setSelectedOrderIds((prev) => prev.filter((id) => visibleIds.has(id)));
+  }, [displayedOrders]);
 
   const fetchOrders = useCallback(async ({ showErrorToast = true }: { showErrorToast?: boolean } = {}) => {
     try {
@@ -217,6 +222,7 @@ export default function AdminOrdersPage() {
         setSelectedOrder(null);
       }
       await fetchOrders({ showErrorToast: false });
+      setSelectedOrderIds((prev) => prev.filter((id) => id !== orderId));
     } catch (error: any) {
       toast({
         title: 'Алдаа',
@@ -225,6 +231,67 @@ export default function AdminOrdersPage() {
       });
     } finally {
       setDeletingOrderId(null);
+    }
+  };
+
+  const toggleSelectOrder = (orderId: string) => {
+    setSelectedOrderIds((prev) =>
+      prev.includes(orderId) ? prev.filter((id) => id !== orderId) : [...prev, orderId]
+    );
+  };
+
+  const allDisplayedSelected =
+    displayedOrders.length > 0 && displayedOrders.every((order) => selectedOrderIds.includes(order._id));
+
+  const toggleSelectAllDisplayed = () => {
+    if (allDisplayedSelected) {
+      setSelectedOrderIds([]);
+      return;
+    }
+    setSelectedOrderIds(displayedOrders.map((order) => order._id));
+  };
+
+  const handleDeleteSelectedOrders = async () => {
+    if (selectedOrderIds.length === 0) {
+      toast({
+        title: 'Анхааруулга',
+        description: 'Устгах захиалгаа эхлээд сонгоно уу',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `${selectedOrderIds.length} захиалгыг устгахдаа итгэлтэй байна уу?`
+    );
+    if (!confirmed) return;
+
+    try {
+      setBulkDeleting('all');
+      const response = await api.delete('/admin/orders', {
+        timeout: 30000,
+        params: {
+          mode: 'selected',
+          orderIds: selectedOrderIds.join(','),
+        },
+      });
+      toast({
+        title: 'Амжилттай',
+        description:
+          response.data?.deletedCount > 0
+            ? `${response.data.deletedCount} захиалга устгагдлаа`
+            : 'Устгах захиалга олдсонгүй',
+      });
+      setSelectedOrderIds([]);
+      await fetchOrders({ showErrorToast: false });
+    } catch (error: any) {
+      toast({
+        title: 'Алдаа',
+        description: error.response?.data?.message || 'Сонгосон захиалгууд устгахад алдаа гарлаа',
+        variant: 'destructive',
+      });
+    } finally {
+      setBulkDeleting(null);
     }
   };
 
@@ -314,29 +381,10 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const openDetails = async (order: Order) => {
-    try {
-      setOpeningOrderId(order._id);
-      const response = await api.get(`/admin/orders/${order._id}`, { timeout: 30000 });
-      if (response.data?.success && response.data?.order) {
-        setSelectedOrder(response.data.order);
-      } else {
-        setSelectedOrder(order);
-      }
-      setIsDetailsOpen(true);
-      setShowReceipt(false);
-    } catch (error: any) {
-      setSelectedOrder(order);
-      setIsDetailsOpen(true);
-      setShowReceipt(false);
-      toast({
-        title: 'Анхааруулга',
-        description: error.response?.data?.message || 'Дэлгэрэнгүй мэдээлэл дутуу ирж болзошгүй',
-        variant: 'destructive',
-      });
-    } finally {
-      setOpeningOrderId(null);
-    }
+  const openDetails = (order: Order) => {
+    setSelectedOrder(order);
+    setIsDetailsOpen(true);
+    setShowReceipt(false);
   };
 
   const getStatusLabel = (status: string) => {
@@ -463,6 +511,15 @@ export default function AdminOrdersPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={handleDeleteSelectedOrders}
+                  disabled={bulkDeleting !== null || selectedOrderIds.length === 0}
+                  className="text-xs md:text-sm whitespace-nowrap border-red-400 text-red-700 hover:bg-red-50"
+                >
+                  {bulkDeleting === 'all' ? 'Устгаж байна...' : `Сонгосонг устгах (${selectedOrderIds.length})`}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleDeleteAllHistory}
                   disabled={bulkDeleting !== null}
                   className="text-xs md:text-sm whitespace-nowrap border-red-500 text-red-700 hover:bg-red-50"
@@ -493,6 +550,16 @@ export default function AdminOrdersPage() {
                   <table className="w-full text-xs md:text-sm">
                     <thead>
                       <tr className="border-b bg-gray-50">
+                        <th className="text-left py-2 px-2 md:py-3 md:px-4 font-medium w-10">
+                          <input
+                            id="admin-order-select-all"
+                            name="adminOrderSelectAll"
+                            type="checkbox"
+                            checked={allDisplayedSelected}
+                            onChange={toggleSelectAllDisplayed}
+                            className="h-4 w-4 rounded border-gray-300"
+                          />
+                        </th>
                         <th className="text-left py-2 px-2 md:py-3 md:px-4 font-medium">№</th>
                         <th className="text-left py-2 px-2 md:py-3 md:px-4 font-medium">ЗАХИАЛГЫН КОД</th>
                         <th className="text-left py-2 px-2 md:py-3 md:px-4 font-medium">УТАСНЫ ДУГААР</th>
@@ -505,6 +572,16 @@ export default function AdminOrdersPage() {
                     <tbody>
                       {displayedOrders.map((order, index) => (
                         <tr key={order._id} className="border-b hover:bg-gray-50">
+                          <td className="py-2 px-2 md:py-3 md:px-4">
+                            <input
+                              id={`admin-order-select-${order._id}`}
+                              name={`adminOrderSelect-${order._id}`}
+                              type="checkbox"
+                              checked={selectedOrderIds.includes(order._id)}
+                              onChange={() => toggleSelectOrder(order._id)}
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                          </td>
                           <td className="py-2 px-2 md:py-3 md:px-4">{index + 1}</td>
                           <td className="py-2 px-2 md:py-3 md:px-4 font-medium">
                             {order.orderCode || '-'}
@@ -551,10 +628,9 @@ export default function AdminOrdersPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => openDetails(order)}
-                              disabled={openingOrderId === order._id}
                               className="text-xs md:text-sm"
                             >
-                              {openingOrderId === order._id ? 'Нээж байна...' : 'Дэлгэрэнгүй'}
+                              Дэлгэрэнгүй
                             </Button>
                           </td>
                         </tr>
