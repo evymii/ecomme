@@ -893,7 +893,10 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
       });
       return;
     }
-    res.status(500).json({ success: false, message: 'Захиалгын түүх устгахад серверийн алдаа гарлаа' });
+    res.status(500).json({
+      success: false,
+      message: error?.message || 'Захиалгын түүх устгахад серверийн алдаа гарлаа',
+    });
   }
 };
 
