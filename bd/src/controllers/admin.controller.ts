@@ -680,12 +680,13 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
 
 export const deleteOrder = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const rawId = typeof req.params?.id === 'string' ? req.params.id : '';
+    const id = rawId.trim();
     if (!id || !mongoose.isValidObjectId(id)) {
       res.status(400).json({ success: false, message: 'Захиалгын ID буруу байна' });
       return;
     }
-    const deletedOrder = await Order.findByIdAndDelete(id);
+    const deletedOrder = await Order.findOneAndDelete({ _id: id });
 
     if (!deletedOrder) {
       res.status(404).json({ success: false, message: 'Захиалга олдсонгүй' });
@@ -710,7 +711,7 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
     const mode = (body.mode ?? query.mode) as string | undefined;
     const startDate = (body.startDate ?? query.startDate) as string | undefined;
     const endDate = (body.endDate ?? query.endDate) as string | undefined;
-    const normalizedMode = mode === 'all' ? 'all' : 'range';
+    const normalizedMode = typeof mode === 'string' && mode.trim().toLowerCase() === 'all' ? 'all' : 'range';
     const deleteQuery: any = {};
     const parseDateSafe = (value: any, endOfDay = false): Date | null => {
       if (!value || typeof value !== 'string') return null;
@@ -788,7 +789,7 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
     }
 
     if (normalizedMode === 'all') {
-      const result = await Order.deleteMany({});
+      const result = await Order.deleteMany({}).maxTimeMS(8000);
       res.json({
         success: true,
         message: 'Бүх захиалгын түүх амжилттай устгагдлаа',
@@ -797,10 +798,8 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    // Range mode: find matching orders first, then delete explicitly by IDs.
-    const matchingOrders = await Order.find(deleteQuery).select('_id').lean();
-    const idsToDelete = matchingOrders.map((o: any) => o._id).filter(Boolean);
-    if (idsToDelete.length === 0) {
+    const matchingCount = await Order.countDocuments(deleteQuery);
+    if (!matchingCount) {
       res.json({
         success: true,
         message: 'Сонгосон хугацаанд устгах захиалга олдсонгүй',
@@ -809,7 +808,8 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const result = await Order.deleteMany({ _id: { $in: idsToDelete } });
+    // Delete directly by date query for better performance on serverless runtime limits.
+    const result = await Order.deleteMany(deleteQuery).maxTimeMS(8000);
 
     res.json({
       success: true,
@@ -823,6 +823,15 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
       query: req.query,
       body: req.body,
     });
+    const isTimeoutError =
+      error?.name === 'MongoServerError' && /time limit|exceeded/i.test(error?.message || '');
+    if (isTimeoutError) {
+      res.status(503).json({
+        success: false,
+        message: 'Устгалт удааширлаа. Дахин оролдоно уу (сервер ачаалалтай байна).',
+      });
+      return;
+    }
     res.status(500).json({ success: false, message: 'Захиалгын түүх устгахад серверийн алдаа гарлаа' });
   }
 };

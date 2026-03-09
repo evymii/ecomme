@@ -22,14 +22,22 @@ const allowedOrigins = [
   'https://az-souvenir.com',
   'http://localhost:3000',
   'http://localhost:3001',
-].filter(Boolean);
+].filter((origin): origin is string => Boolean(origin));
+
+const normalizeOrigin = (value: string) => value.replace(/\/+$/, '').toLowerCase();
+const normalizedAllowedOrigins = allowedOrigins.map((origin) => normalizeOrigin(origin));
+const isTrustedOrigin = (origin: string): boolean => {
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (normalizedAllowedOrigins.includes(normalizedOrigin)) return true;
+  return /^https:\/\/([a-z0-9-]+\.)*az-souvenir\.com$/i.test(normalizedOrigin);
+};
 
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     // Allow requests with no origin (curl, mobile apps)
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.includes(origin)) {
+    if (isTrustedOrigin(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -64,7 +72,7 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
       'http://localhost:3001'
     ].filter(Boolean);
     
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || isTrustedOrigin(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin || '*');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');

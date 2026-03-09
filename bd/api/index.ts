@@ -22,7 +22,16 @@ const allowedOrigins = [
   'https://az-souvenir.com',
   'http://localhost:3000',
   'http://localhost:3001',
-].filter(Boolean);
+].filter((origin): origin is string => Boolean(origin));
+
+const normalizeOrigin = (value: string) => value.replace(/\/+$/, '').toLowerCase();
+const normalizedAllowedOrigins = allowedOrigins.map((origin) => normalizeOrigin(origin));
+const isTrustedOrigin = (origin: string): boolean => {
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (normalizedAllowedOrigins.includes(normalizedOrigin)) return true;
+  // Keep custom domain resilient to www/non-www variations.
+  return /^https:\/\/([a-z0-9-]+\.)*az-souvenir\.com$/i.test(normalizedOrigin);
+};
 
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
@@ -31,7 +40,7 @@ const corsOptions = {
       return;
     }
 
-    if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+    if (isTrustedOrigin(origin) || process.env.NODE_ENV !== 'production') {
       callback(null, true);
     } else {
       // Do not throw an error here; it turns CORS rejection into 500.
@@ -53,7 +62,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.get('/uploads/:folder/:filename', (req, res, next) => {
   // Set CORS headers
   const origin = req.headers.origin;
-  if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+  if (!origin || isTrustedOrigin(origin) || process.env.NODE_ENV !== 'production') {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
