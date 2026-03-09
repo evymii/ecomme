@@ -16,18 +16,26 @@ dotenv.config();
 const app = express();
 
 // CORS configuration for Vercel
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'https://www.az-souvenir.com',
+  'https://az-souvenir.com',
+  'http://localhost:3000',
+  'http://localhost:3001',
+].filter(Boolean);
+
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    const allowedOrigins = [
-      process.env.FRONTEND_URL,
-      'http://localhost:3000',
-      'http://localhost:3001'
-    ].filter(Boolean);
-    
-    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      // Do not throw an error here; it turns CORS rejection into 500.
+      callback(null, false);
     }
   },
   credentials: true,
@@ -45,12 +53,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.get('/uploads/:folder/:filename', (req, res, next) => {
   // Set CORS headers
   const origin = req.headers.origin;
-  const allowedOrigins = [
-    process.env.FRONTEND_URL,
-    'http://localhost:3000',
-    'http://localhost:3001'
-  ].filter(Boolean);
-  
   if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
   }

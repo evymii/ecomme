@@ -16,29 +16,23 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Middleware - CORS configuration
+const allowedOrigins = [
+  process.env.FRONTEND_URL, // e.g., https://www.az-souvenir.com
+  'https://www.az-souvenir.com',
+  'https://az-souvenir.com',
+  'http://localhost:3000',
+  'http://localhost:3001',
+].filter(Boolean);
+
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // Allow requests with no origin (curl, mobile apps)
     if (!origin) return callback(null, true);
-    
-    const allowedOrigins = [
-      process.env.FRONTEND_URL,
-      'https://www.az-souvenir.com',
-      'https://az-souvenir.com',
-      'http://localhost:3000',
-      'http://localhost:3001'
-    ].filter(Boolean);
-    
-    // Allow all origins in development, restrict in production
-    if (process.env.NODE_ENV === 'production' && allowedOrigins.length > 0) {
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    } else {
+
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
@@ -46,10 +40,13 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   exposedHeaders: ['Content-Length'],
   preflightContinue: false,
-  optionsSuccessStatus: 204
+  optionsSuccessStatus: 204,
 };
 
+// Apply globally
 app.use(cors(corsOptions));
+
+// Ensure OPTIONS requests are handled
 app.options('*', cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));
