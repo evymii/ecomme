@@ -74,7 +74,7 @@ export default function AdminOrdersPage() {
   const [searchFilter, setSearchFilter] = useState('');
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
-  const [bulkDeleting, setBulkDeleting] = useState<'range' | 'all' | null>(null);
+  const [deletingSelected, setDeletingSelected] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -267,12 +267,13 @@ export default function AdminOrdersPage() {
     if (!confirmed) return;
 
     try {
-      setBulkDeleting('all');
+      setDeletingSelected(true);
+      const idsToDelete = [...selectedOrderIds];
       const response = await api.delete('/admin/orders', {
         timeout: 30000,
         params: {
           mode: 'selected',
-          orderIds: selectedOrderIds.join(','),
+          orderIds: idsToDelete.join(','),
         },
       });
       toast({
@@ -282,6 +283,12 @@ export default function AdminOrdersPage() {
             ? `${response.data.deletedCount} захиалга устгагдлаа`
             : 'Устгах захиалга олдсонгүй',
       });
+      const deletedSet = new Set(idsToDelete);
+      setOrders((prev) => prev.filter((order) => !deletedSet.has(order._id)));
+      if (selectedOrder && deletedSet.has(selectedOrder._id)) {
+        setSelectedOrder(null);
+        setIsDetailsOpen(false);
+      }
       setSelectedOrderIds([]);
       await fetchOrders({ showErrorToast: false });
     } catch (error: any) {
@@ -291,93 +298,7 @@ export default function AdminOrdersPage() {
         variant: 'destructive',
       });
     } finally {
-      setBulkDeleting(null);
-    }
-  };
-
-  const handleDeleteRangeHistory = async () => {
-    if (!startDate || !endDate) {
-      toast({
-        title: 'Анхааруулга',
-        description: 'Эхлэх болон дуусах огноог сонгоно уу',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (new Date(startDate) > new Date(endDate)) {
-      toast({
-        title: 'Анхааруулга',
-        description: 'Эхлэх огноо дуусах огнооноос хойш байж болохгүй',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Сонгосон хугацааны (${startDate} - ${endDate}) захиалгын түүхийг устгахдаа итгэлтэй байна уу?`
-    );
-    if (!confirmed) return;
-
-    try {
-      setBulkDeleting('range');
-      const response = await api.delete('/admin/orders', {
-        timeout: 30000,
-        params: {
-          mode: 'range',
-          startDate,
-          endDate,
-        },
-      });
-      toast({
-        title: 'Амжилттай',
-        description:
-          response.data?.deletedCount > 0
-            ? `${response.data.deletedCount} захиалга устгагдлаа`
-            : 'Устгах захиалга олдсонгүй',
-      });
-      await fetchOrders({ showErrorToast: false });
-    } catch (error: any) {
-      toast({
-        title: 'Алдаа',
-        description: error.response?.data?.message || 'Сонгосон хугацааны түүх устгахад алдаа гарлаа',
-        variant: 'destructive',
-      });
-    } finally {
-      setBulkDeleting(null);
-    }
-  };
-
-  const handleDeleteAllHistory = async () => {
-    const confirmed = window.confirm('БҮХ захиалгын түүхийг устгахдаа итгэлтэй байна уу? Энэ үйлдлийг буцаах боломжгүй.');
-    if (!confirmed) return;
-
-    try {
-      setBulkDeleting('all');
-      const response = await api.delete('/admin/orders', {
-        timeout: 30000,
-        params: {
-          mode: 'all',
-        },
-      });
-      toast({
-        title: 'Амжилттай',
-        description:
-          response.data?.deletedCount > 0
-            ? `${response.data.deletedCount} захиалга устгагдлаа`
-            : 'Устгах захиалга олдсонгүй',
-      });
-      setIsDetailsOpen(false);
-      setSelectedOrder(null);
-      await fetchOrders({ showErrorToast: false });
-    } catch (error: any) {
-      toast({
-        title: 'Алдаа',
-        description: error.response?.data?.message || 'Бүх түүх устгахад алдаа гарлаа',
-        variant: 'destructive',
-      });
-    } finally {
-      setBulkDeleting(null);
+      setDeletingSelected(false);
     }
   };
 
@@ -502,29 +423,11 @@ export default function AdminOrdersPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleDeleteRangeHistory}
-                  disabled={bulkDeleting !== null}
-                  className="text-xs md:text-sm whitespace-nowrap border-red-300 text-red-600 hover:bg-red-50"
-                >
-                  {bulkDeleting === 'range' ? 'Устгаж байна...' : 'Хугацаагаар түүх устгах'}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
                   onClick={handleDeleteSelectedOrders}
-                  disabled={bulkDeleting !== null || selectedOrderIds.length === 0}
+                  disabled={deletingSelected || selectedOrderIds.length === 0}
                   className="text-xs md:text-sm whitespace-nowrap border-red-400 text-red-700 hover:bg-red-50"
                 >
-                  {bulkDeleting === 'all' ? 'Устгаж байна...' : `Сонгосонг устгах (${selectedOrderIds.length})`}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDeleteAllHistory}
-                  disabled={bulkDeleting !== null}
-                  className="text-xs md:text-sm whitespace-nowrap border-red-500 text-red-700 hover:bg-red-50"
-                >
-                  {bulkDeleting === 'all' ? 'Устгаж байна...' : 'Бүх түүх устгах'}
+                  {deletingSelected ? 'Устгаж байна...' : `Устгах (${selectedOrderIds.length})`}
                 </Button>
               </div>
             </div>
