@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
+import mongoose from 'mongoose';
 import { AuthRequest } from '../middleware/auth.js';
 import User from '../models/User.model.js';
 import Product from '../models/Product.model.js';
@@ -572,18 +573,42 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
     if (startDate && createdAtFilter.$gte) console.log('📅 Start date:', createdAtFilter.$gte);
     if (endDate && createdAtFilter.$lte) console.log('📅 End date:', createdAtFilter.$lte);
 
-    // Optimize: use lean() and select only needed fields for faster queries
-    // Use select() on populate to reduce data transfer
+    // Read raw refs first; manual enrichment avoids populate cast crashes on legacy/corrupt docs.
     const orders = await Order.find(query)
       .select('orderCode items total status createdAt phoneNumber email customerName user deliveryAddress paymentMethod address payment')
-      .populate('user', 'name phoneNumber email')
-      .populate('items.product', 'name price code')
       .sort({ createdAt: -1 })
       .limit(500) // Limit orders to prevent huge responses
       .lean();
 
+    const userIds = new Set<string>();
+    const productIds = new Set<string>();
+    for (const order of orders as any[]) {
+      if (order?.user && mongoose.isValidObjectId(order.user)) {
+        userIds.add(String(order.user));
+      }
+      if (Array.isArray(order?.items)) {
+        for (const item of order.items) {
+          if (item?.product && mongoose.isValidObjectId(item.product)) {
+            productIds.add(String(item.product));
+          }
+        }
+      }
+    }
+
+    const [users, products] = await Promise.all([
+      userIds.size > 0
+        ? User.find({ _id: { $in: Array.from(userIds) } }).select('name phoneNumber email').lean()
+        : Promise.resolve([]),
+      productIds.size > 0
+        ? Product.find({ _id: { $in: Array.from(productIds) } }).select('name price code').lean()
+        : Promise.resolve([]),
+    ]);
+
+    const userMap = new Map<string, any>((users as any[]).map((u: any) => [String(u._id), u]));
+    const productMap = new Map<string, any>((products as any[]).map((p: any) => [String(p._id), p]));
+
     // Normalize legacy documents so admin UI always receives these fields.
-    const normalizedOrders = orders.map((order: any) => {
+    const normalizedOrders = (orders as any[]).map((order: any) => {
       const normalizedOrderCode =
         typeof order.orderCode === 'string' && order.orderCode.length > 5
           ? order.orderCode.slice(-5)
@@ -605,8 +630,33 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
         order.payment?.paymentMethod ||
         'pay_later';
 
+      const normalizedUser =
+        order.user && mongoose.isValidObjectId(order.user)
+          ? userMap.get(String(order.user)) || undefined
+          : undefined;
+
+      const normalizedItems = Array.isArray(order.items)
+        ? order.items.map((item: any) => {
+            if (item?.product && mongoose.isValidObjectId(item.product)) {
+              return {
+                ...item,
+                product: productMap.get(String(item.product)) || null,
+              };
+            }
+            return {
+              ...item,
+              product:
+                item?.product && typeof item.product === 'object'
+                  ? item.product
+                  : null,
+            };
+          })
+        : [];
+
       return {
         ...order,
+        user: normalizedUser,
+        items: normalizedItems,
         orderCode: normalizedOrderCode,
         deliveryAddress: normalizedDeliveryAddress,
         paymentMethod: normalizedPaymentMethod,
@@ -619,14 +669,22 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
     res.setHeader('Cache-Control', 'private, max-age=10');
     res.json({ success: true, orders: normalizedOrders });
   } catch (error: any) {
-    console.error('❌ Error fetching orders for admin:', error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error('❌ Error fetching orders for admin:', {
+      message: error?.message,
+      stack: error?.stack,
+      query: req.query,
+    });
+    res.status(500).json({ success: false, message: 'Захиалга авахад серверийн алдаа гарлаа' });
   }
 };
 
 export const deleteOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    if (!id || !mongoose.isValidObjectId(id)) {
+      res.status(400).json({ success: false, message: 'Захиалгын ID буруу байна' });
+      return;
+    }
     const deletedOrder = await Order.findByIdAndDelete(id);
 
     if (!deletedOrder) {
@@ -636,7 +694,12 @@ export const deleteOrder = async (req: Request, res: Response): Promise<void> =>
 
     res.json({ success: true, message: 'Захиалга амжилттай устгагдлаа' });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('❌ Delete single order error:', {
+      message: error?.message,
+      stack: error?.stack,
+      orderId: req.params?.id,
+    });
+    res.status(500).json({ success: false, message: 'Захиалга устгахад серверийн алдаа гарлаа' });
   }
 };
 
@@ -754,8 +817,13 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
       deletedCount: result.deletedCount || 0,
     });
   } catch (error: any) {
-    console.error('❌ Delete order history error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error('❌ Delete order history error:', {
+      message: error?.message,
+      stack: error?.stack,
+      query: req.query,
+      body: req.body,
+    });
+    res.status(500).json({ success: false, message: 'Захиалгын түүх устгахад серверийн алдаа гарлаа' });
   }
 };
 
