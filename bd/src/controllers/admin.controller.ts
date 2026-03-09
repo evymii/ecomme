@@ -770,9 +770,13 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
     const body = req.body || {};
     const query = req.query || {};
     const mode = (body.mode ?? query.mode) as string | undefined;
+    const orderIdsInput = body.orderIds ?? query.orderIds;
     const startDate = (body.startDate ?? query.startDate) as string | undefined;
     const endDate = (body.endDate ?? query.endDate) as string | undefined;
-    const normalizedMode = typeof mode === 'string' && mode.trim().toLowerCase() === 'all' ? 'all' : 'range';
+    const normalizedMode =
+      typeof mode === 'string'
+        ? (mode.trim().toLowerCase() as 'all' | 'range' | 'selected')
+        : 'range';
     const deleteQuery: any = {};
     const parseDateSafe = (value: any, endOfDay = false): Date | null => {
       if (!value || typeof value !== 'string') return null;
@@ -815,6 +819,36 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
       }
       return parsed;
     };
+
+    if (normalizedMode === 'selected') {
+      const ids =
+        Array.isArray(orderIdsInput)
+          ? orderIdsInput
+          : typeof orderIdsInput === 'string'
+            ? orderIdsInput.split(',')
+            : [];
+
+      const sanitizedIds = Array.from(
+        new Set(
+          ids
+            .map((id: any) => String(id || '').trim())
+            .filter((id: string) => mongoose.isValidObjectId(id))
+        )
+      );
+
+      if (sanitizedIds.length === 0) {
+        res.status(400).json({ success: false, message: 'Устгах захиалгууд сонгоогүй байна' });
+        return;
+      }
+
+      const result = await Order.deleteMany({ _id: { $in: sanitizedIds } });
+      res.json({
+        success: true,
+        message: 'Сонгосон захиалгууд амжилттай устгагдлаа',
+        deletedCount: result.deletedCount || 0,
+      });
+      return;
+    }
 
     if (normalizedMode === 'range') {
       const start = parseDateSafe(startDate);
