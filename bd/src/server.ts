@@ -24,6 +24,8 @@ const corsOptions = {
     
     const allowedOrigins = [
       process.env.FRONTEND_URL,
+      'https://www.az-souvenir.com',
+      'https://az-souvenir.com',
       'http://localhost:3000',
       'http://localhost:3001'
     ].filter(Boolean);
