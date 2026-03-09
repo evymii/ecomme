@@ -158,11 +158,10 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
 
   const rotatingCategoryWidthStyle = useMemo(() => {
     const longestCategoryLength = categories.reduce((max, cat) => Math.max(max, cat.name.length), 0);
-    // +6 for icon/padding so long names don't get clipped in the animated badge.
+    // +6 for icon/padding so long names don't get clipped in the animated badge on desktop.
     const widthInCh = Math.max(12, Math.min(34, longestCategoryLength + 6));
     return {
-      width: `${widthInCh}ch`,
-      maxWidth: '70vw',
+      ['--rotating-width' as string]: `${widthInCh}ch`,
     } as const;
   }, [categories]);
 
@@ -174,10 +173,12 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
 
       <section className="border-b border-[#02111B]/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-3">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#02111B]/5 rounded-full flex-shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-3">
+            <div className="inline-flex w-full sm:w-auto justify-center sm:justify-start items-center gap-2 px-4 py-2 bg-[#02111B]/5 rounded-full">
               <Zap className="w-3.5 h-3.5 text-[#02111B]" />
-              <span className="text-sm text-[#02111B] font-medium tracking-tight whitespace-nowrap">Шинэ бүтээгдэхүүн ирлээ</span>
+              <span className="text-sm text-[#02111B] font-medium tracking-tight whitespace-nowrap text-center sm:text-left">
+                Шинэ бүтээгдэхүүн ирлээ
+              </span>
             </div>
 
             <div className="hidden sm:flex items-center gap-5">
@@ -196,7 +197,10 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
             </div>
 
             {categories.length > 0 ? (
-              <div className="relative flex-shrink-0 h-10 overflow-hidden" style={rotatingCategoryWidthStyle}>
+              <div
+                className="relative h-10 overflow-hidden w-full sm:w-[var(--rotating-width)] sm:max-w-[34ch] sm:flex-shrink-0"
+                style={rotatingCategoryWidthStyle}
+              >
                 {categories.map((cat, i) => (
                   <div
                     key={cat._id}
@@ -215,8 +219,10 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
                       onClick={() => handleCategoryFilter(cat.name)}
                       className="inline-flex w-full h-10 items-center justify-center gap-2 px-4 border border-[#02111B]/10 rounded-full hover:bg-[#02111B]/5 transition-colors"
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#02111B]" />
-                      <span className="text-sm text-[#02111B] font-medium tracking-tight whitespace-nowrap">{cat.name}</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#02111B] flex-shrink-0" />
+                      <span className="text-sm text-[#02111B] font-medium tracking-tight whitespace-nowrap truncate max-w-full">
+                        {cat.name}
+                      </span>
                     </button>
                   </div>
                 ))}

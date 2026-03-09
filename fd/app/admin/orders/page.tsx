@@ -73,6 +73,7 @@ export default function AdminOrdersPage() {
   const [searchInput, setSearchInput] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState<'range' | 'all' | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -319,10 +320,29 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const openDetails = (order: Order) => {
-    setSelectedOrder(order);
-    setIsDetailsOpen(true);
-    setShowReceipt(false);
+  const openDetails = async (order: Order) => {
+    try {
+      setOpeningOrderId(order._id);
+      const response = await api.get(`/admin/orders/${order._id}`, { timeout: 30000 });
+      if (response.data?.success && response.data?.order) {
+        setSelectedOrder(response.data.order);
+      } else {
+        setSelectedOrder(order);
+      }
+      setIsDetailsOpen(true);
+      setShowReceipt(false);
+    } catch (error: any) {
+      setSelectedOrder(order);
+      setIsDetailsOpen(true);
+      setShowReceipt(false);
+      toast({
+        title: 'Анхааруулга',
+        description: error.response?.data?.message || 'Дэлгэрэнгүй мэдээлэл дутуу ирж болзошгүй',
+        variant: 'destructive',
+      });
+    } finally {
+      setOpeningOrderId(null);
+    }
   };
 
   const getStatusLabel = (status: string) => {
@@ -528,9 +548,10 @@ export default function AdminOrdersPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => openDetails(order)}
+                              disabled={openingOrderId === order._id}
                               className="text-xs md:text-sm"
                             >
-                              Дэлгэрэнгүй
+                              {openingOrderId === order._id ? 'Нээж байна...' : 'Дэлгэрэнгүй'}
                             </Button>
                           </td>
                         </tr>
