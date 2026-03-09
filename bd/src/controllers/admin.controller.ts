@@ -580,33 +580,6 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
       .limit(500) // Limit orders to prevent huge responses
       .lean();
 
-    const userIds = new Set<string>();
-    const productIds = new Set<string>();
-    for (const order of orders as any[]) {
-      if (order?.user && mongoose.isValidObjectId(order.user)) {
-        userIds.add(String(order.user));
-      }
-      if (Array.isArray(order?.items)) {
-        for (const item of order.items) {
-          if (item?.product && mongoose.isValidObjectId(item.product)) {
-            productIds.add(String(item.product));
-          }
-        }
-      }
-    }
-
-    const [users, products] = await Promise.all([
-      userIds.size > 0
-        ? User.find({ _id: { $in: Array.from(userIds) } }).select('name phoneNumber email').lean()
-        : Promise.resolve([]),
-      productIds.size > 0
-        ? Product.find({ _id: { $in: Array.from(productIds) } }).select('name price code').lean()
-        : Promise.resolve([]),
-    ]);
-
-    const userMap = new Map<string, any>((users as any[]).map((u: any) => [String(u._id), u]));
-    const productMap = new Map<string, any>((products as any[]).map((p: any) => [String(p._id), p]));
-
     // Normalize legacy documents so admin UI always receives these fields.
     const normalizedOrders = (orders as any[]).map((order: any) => {
       const normalizedOrderCode =
@@ -630,19 +603,8 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
         order.payment?.paymentMethod ||
         'pay_later';
 
-      const normalizedUser =
-        order.user && mongoose.isValidObjectId(order.user)
-          ? userMap.get(String(order.user)) || undefined
-          : undefined;
-
       const normalizedItems = Array.isArray(order.items)
         ? order.items.map((item: any) => {
-            if (item?.product && mongoose.isValidObjectId(item.product)) {
-              return {
-                ...item,
-                product: productMap.get(String(item.product)) || null,
-              };
-            }
             return {
               ...item,
               product:
@@ -655,7 +617,7 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
 
       return {
         ...order,
-        user: normalizedUser,
+        user: order.user && typeof order.user === 'object' ? order.user : undefined,
         items: normalizedItems,
         orderCode: normalizedOrderCode,
         deliveryAddress: normalizedDeliveryAddress,
@@ -675,6 +637,105 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
       query: req.query,
     });
     res.status(500).json({ success: false, message: 'Захиалга авахад серверийн алдаа гарлаа' });
+  }
+};
+
+export const getOrderDetails = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawId = typeof req.params?.id === 'string' ? req.params.id : '';
+    const id = rawId.trim();
+    if (!id || !mongoose.isValidObjectId(id)) {
+      res.status(400).json({ success: false, message: 'Захиалгын ID буруу байна' });
+      return;
+    }
+
+    const order = await Order.findById(id)
+      .select('orderCode items total status createdAt phoneNumber email customerName user deliveryAddress paymentMethod address payment')
+      .lean();
+
+    if (!order) {
+      res.status(404).json({ success: false, message: 'Захиалга олдсонгүй' });
+      return;
+    }
+
+    const userId =
+      order.user && mongoose.isValidObjectId(order.user)
+        ? String(order.user)
+        : null;
+    const productIds = Array.isArray(order.items)
+      ? order.items
+          .map((item: any) => item?.product)
+          .filter((pid: any) => pid && mongoose.isValidObjectId(pid))
+          .map((pid: any) => String(pid))
+      : [];
+
+    const [user, products] = await Promise.all([
+      userId
+        ? User.findById(userId).select('name phoneNumber email').lean()
+        : Promise.resolve(null),
+      productIds.length > 0
+        ? Product.find({ _id: { $in: productIds } })
+            .select('name price code images')
+            .lean()
+        : Promise.resolve([]),
+    ]);
+
+    const productMap = new Map<string, any>(
+      (products as any[]).map((p: any) => [String(p._id), p])
+    );
+
+    const normalizedOrderCode =
+      typeof (order as any).orderCode === 'string' && (order as any).orderCode.length > 5
+        ? (order as any).orderCode.slice(-5)
+        : (order as any).orderCode;
+
+    const normalizedDeliveryAddress = (order as any).deliveryAddress?.address
+      ? (order as any).deliveryAddress
+      : typeof (order as any).deliveryAddress === 'string'
+        ? { address: (order as any).deliveryAddress }
+        : typeof (order as any).address === 'string'
+          ? { address: (order as any).address }
+          : (order as any).address?.deliveryAddress
+            ? { address: (order as any).address.deliveryAddress, additionalInfo: (order as any).address.additionalInfo || '' }
+            : undefined;
+
+    const normalizedPaymentMethod =
+      (order as any).paymentMethod ||
+      (order as any).payment?.method ||
+      (order as any).payment?.paymentMethod ||
+      'pay_later';
+
+    const normalizedItems = Array.isArray((order as any).items)
+      ? (order as any).items.map((item: any) => {
+          const productId =
+            item?.product && mongoose.isValidObjectId(item.product)
+              ? String(item.product)
+              : null;
+          const productDoc = productId ? productMap.get(productId) : null;
+          return {
+            ...item,
+            product: productDoc || (item?.product && typeof item.product === 'object' ? item.product : null),
+          };
+        })
+      : [];
+
+    const responseOrder = {
+      ...(order as any),
+      user: user || undefined,
+      items: normalizedItems,
+      orderCode: normalizedOrderCode,
+      deliveryAddress: normalizedDeliveryAddress,
+      paymentMethod: normalizedPaymentMethod,
+    };
+
+    res.json({ success: true, order: responseOrder });
+  } catch (error: any) {
+    console.error('❌ Error fetching order details for admin:', {
+      message: error?.message,
+      stack: error?.stack,
+      orderId: req.params?.id,
+    });
+    res.status(500).json({ success: false, message: 'Захиалгын дэлгэрэнгүй авахад серверийн алдаа гарлаа' });
   }
 };
 
@@ -789,7 +850,7 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
     }
 
     if (normalizedMode === 'all') {
-      const result = await Order.deleteMany({}).maxTimeMS(8000);
+      const result = await Order.deleteMany({});
       res.json({
         success: true,
         message: 'Бүх захиалгын түүх амжилттай устгагдлаа',
@@ -809,7 +870,7 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
     }
 
     // Delete directly by date query for better performance on serverless runtime limits.
-    const result = await Order.deleteMany(deleteQuery).maxTimeMS(8000);
+    const result = await Order.deleteMany(deleteQuery);
 
     res.json({
       success: true,

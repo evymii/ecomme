@@ -12,6 +12,7 @@ import {
   updateProduct, 
   deleteProduct, 
   getAllOrders, 
+  getOrderDetails,
   deleteOrder,
   deleteOrderHistory,
   updateOrderStatus 
@@ -50,6 +51,7 @@ router.delete('/products/:id', deleteProduct);
 
 // Orders
 router.get('/orders', getAllOrders);
+router.get('/orders/:id', getOrderDetails);
 router.delete('/orders', deleteOrderHistory);
 router.delete('/orders/:id', deleteOrder);
 router.put('/orders/:id/status', updateOrderStatus);
