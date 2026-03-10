@@ -747,9 +747,10 @@ export const deleteOrder = async (req: Request, res: Response): Promise<void> =>
       res.status(400).json({ success: false, message: 'Захиалгын ID буруу байна' });
       return;
     }
-    const deletedOrder = await Order.findOneAndDelete({ _id: id });
-
-    if (!deletedOrder) {
+    const deleteResult = await Order.collection.deleteOne({
+      _id: new mongoose.Types.ObjectId(id),
+    });
+    if (!deleteResult.deletedCount) {
       res.status(404).json({ success: false, message: 'Захиалга олдсонгүй' });
       return;
     }
@@ -761,7 +762,10 @@ export const deleteOrder = async (req: Request, res: Response): Promise<void> =>
       stack: error?.stack,
       orderId: req.params?.id,
     });
-    res.status(500).json({ success: false, message: 'Захиалга устгахад серверийн алдаа гарлаа' });
+    res.status(500).json({
+      success: false,
+      message: error?.message || 'Захиалга устгахад серверийн алдаа гарлаа',
+    });
   }
 };
 
@@ -841,7 +845,8 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
         return;
       }
 
-      const result = await Order.deleteMany({ _id: { $in: sanitizedIds } });
+      const objectIds = sanitizedIds.map((id) => new mongoose.Types.ObjectId(id));
+      const result = await Order.collection.deleteMany({ _id: { $in: objectIds } });
       res.json({
         success: true,
         message: 'Сонгосон захиалгууд амжилттай устгагдлаа',
@@ -884,7 +889,7 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
     }
 
     if (normalizedMode === 'all') {
-      const result = await Order.deleteMany({});
+      const result = await Order.collection.deleteMany({});
       res.json({
         success: true,
         message: 'Бүх захиалгын түүх амжилттай устгагдлаа',
@@ -904,7 +909,7 @@ export const deleteOrderHistory = async (req: Request, res: Response): Promise<v
     }
 
     // Delete directly by date query for better performance on serverless runtime limits.
-    const result = await Order.deleteMany(deleteQuery);
+    const result = await Order.collection.deleteMany(deleteQuery);
 
     res.json({
       success: true,
