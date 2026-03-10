@@ -81,6 +81,17 @@ export default function AdminOrdersPage() {
   const { isAdmin, isChecking } = useAdminAuth();
   const { toast } = useToast();
 
+  const getRequestErrorMessage = (error: any, fallback: string) => {
+    const status = error?.response?.status;
+    const backendMessage = error?.response?.data?.message;
+    if (backendMessage && status) return `${backendMessage} (HTTP ${status})`;
+    if (backendMessage) return backendMessage;
+    if (status) return `${fallback} (HTTP ${status})`;
+    if (error?.code === 'ECONNABORTED') return 'Хүсэлт хэт удлаа (timeout). Дахин оролдоно уу.';
+    if (error?.message) return `${fallback}: ${error.message}`;
+    return fallback;
+  };
+
   // Set date range helper functions
   const setDateRange = (start: Date, end: Date) => {
     setStartDate(formatDate(start));
@@ -224,9 +235,15 @@ export default function AdminOrdersPage() {
       await fetchOrders({ showErrorToast: false });
       setSelectedOrderIds((prev) => prev.filter((id) => id !== orderId));
     } catch (error: any) {
+      console.error('Delete single order failed:', {
+        message: error?.message,
+        code: error?.code,
+        status: error?.response?.status,
+        data: error?.response?.data,
+      });
       toast({
         title: 'Алдаа',
-        description: error.response?.data?.message || 'Захиалга устгахад алдаа гарлаа',
+        description: getRequestErrorMessage(error, 'Захиалга устгахад алдаа гарлаа'),
         variant: 'destructive',
       });
     } finally {
@@ -269,32 +286,58 @@ export default function AdminOrdersPage() {
     try {
       setDeletingSelected(true);
       const idsToDelete = [...selectedOrderIds];
-      const response = await api.delete('/admin/orders', {
-        timeout: 30000,
-        params: {
-          mode: 'selected',
-          orderIds: idsToDelete.join(','),
-        },
-      });
-      toast({
-        title: 'Амжилттай',
-        description:
-          response.data?.deletedCount > 0
-            ? `${response.data.deletedCount} захиалга устгагдлаа`
-            : 'Устгах захиалга олдсонгүй',
-      });
+      let deletedCount = 0;
+      try {
+        const response = await api.delete('/admin/orders', {
+          timeout: 30000,
+          params: {
+            mode: 'selected',
+            orderIds: idsToDelete.join(','),
+          },
+        });
+        deletedCount = Number(response.data?.deletedCount || 0);
+      } catch (bulkError: any) {
+        console.warn('Bulk selected delete failed. Falling back to per-order delete.', {
+          message: bulkError?.message,
+          status: bulkError?.response?.status,
+          data: bulkError?.response?.data,
+        });
+        const settled = await Promise.allSettled(
+          idsToDelete.map((id) => api.delete(`/admin/orders/${id}`, { timeout: 30000 }))
+        );
+        deletedCount = settled.filter((r) => r.status === 'fulfilled').length;
+      }
+
       const deletedSet = new Set(idsToDelete);
-      setOrders((prev) => prev.filter((order) => !deletedSet.has(order._id)));
-      if (selectedOrder && deletedSet.has(selectedOrder._id)) {
-        setSelectedOrder(null);
-        setIsDetailsOpen(false);
+      if (deletedCount > 0) {
+        setOrders((prev) => prev.filter((order) => !deletedSet.has(order._id)));
+        if (selectedOrder && deletedSet.has(selectedOrder._id)) {
+          setSelectedOrder(null);
+          setIsDetailsOpen(false);
+        }
       }
       setSelectedOrderIds([]);
+
+      toast({
+        title: deletedCount > 0 ? 'Амжилттай' : 'Анхааруулга',
+        description:
+          deletedCount > 0
+            ? `${deletedCount} захиалга устгагдлаа`
+            : 'Сонгосон захиалгуудаас устгах боломжтой захиалга олдсонгүй',
+        variant: deletedCount > 0 ? undefined : 'destructive',
+      });
+
       await fetchOrders({ showErrorToast: false });
     } catch (error: any) {
+      console.error('Delete selected orders failed:', {
+        message: error?.message,
+        code: error?.code,
+        status: error?.response?.status,
+        data: error?.response?.data,
+      });
       toast({
         title: 'Алдаа',
-        description: error.response?.data?.message || 'Сонгосон захиалгууд устгахад алдаа гарлаа',
+        description: getRequestErrorMessage(error, 'Сонгосон захиалгууд устгахад алдаа гарлаа'),
         variant: 'destructive',
       });
     } finally {
