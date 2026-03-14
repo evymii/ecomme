@@ -43,33 +43,40 @@ export const useAuthStore = create<AuthStore>()(
       },
       setToken: (token) => {
         set({ token });
-        if (token) {
-          localStorage.setItem('token', token);
-          try {
-            const currentState = get();
-            if (currentState.user) {
-              localStorage.setItem('auth-storage', JSON.stringify({
-                state: {
-                  user: currentState.user,
-                  token: token
-                },
-                version: 0
-              }));
+        if (typeof window !== 'undefined') {
+          if (token) {
+            localStorage.setItem('token', token);
+            // Cookie backup — survives Safari ITP localStorage clearing
+            document.cookie = `auth_token=${token}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax; Secure`;
+            try {
+              const currentState = get();
+              if (currentState.user) {
+                localStorage.setItem('auth-storage', JSON.stringify({
+                  state: {
+                    user: currentState.user,
+                    token: token
+                  },
+                  version: 0
+                }));
+              }
+            } catch (e) {
+              console.error('Error persisting auth state:', e);
             }
-          } catch (e) {
-            console.error('Error persisting auth state:', e);
+          } else {
+            localStorage.removeItem('token');
+            document.cookie = 'auth_token=; path=/; max-age=0; SameSite=Lax';
           }
-        } else {
-          localStorage.removeItem('token');
         }
       },
       logout: () => {
         set({ user: null, token: null });
         localStorage.removeItem('token');
         localStorage.removeItem('auth-storage');
-        // Clear admin cookie so middleware blocks /admin routes
         if (typeof document !== 'undefined') {
+          // Clear admin cookie so middleware blocks /admin routes
           document.cookie = 'admin_verified=; path=/; max-age=0; SameSite=Lax';
+          // Clear auth token cookie backup
+          document.cookie = 'auth_token=; path=/; max-age=0; SameSite=Lax';
         }
       },
       isAdmin: () => {

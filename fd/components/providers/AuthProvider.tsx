@@ -30,7 +30,15 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         return;
       }
       
-      const token = localStorage.getItem('token');
+      let token = localStorage.getItem('token');
+      // Cookie fallback — Safari ITP can clear localStorage
+      if (!token) {
+        const match = document.cookie.match(/(?:^|; )auth_token=([^;]*)/);
+        if (match) {
+          token = match[1];
+          localStorage.setItem('token', token); // Restore to localStorage
+        }
+      }
       if (token) {
         try {
           const response = await api.get('/users/profile');
@@ -50,7 +58,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           const status = error?.response?.status;
           const isAuthError = status === 401 || status === 403;
           if (isAuthError) {
-            // Don't force-logout automatically; user logs out explicitly.
+            // Token is invalid/expired — clear stale auth state
+            useAuthStore.getState().logout();
             return;
           }
           // For 5xx/network/cors glitches, keep current auth state.

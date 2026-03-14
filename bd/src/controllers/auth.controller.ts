@@ -138,7 +138,15 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // No duplicate check - allow multiple users with same email/phone number
+    // Check if phone number already exists (prevent duplicate accounts)
+    const existingUser = await User.findOne({ phoneNumber: cleanPhoneNumber }).select('_id').lean();
+    if (existingUser) {
+      res.status(409).json({
+        success: false,
+        message: 'Энэ утасны дугаараар бүртгэл аль хэдийн үүссэн байна. Нэвтрэх хэсгээр орно уу.'
+      });
+      return;
+    }
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -251,42 +259,49 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
     // Clean phone number (remove spaces/dashes) - phone number is NOT verified, just used for login
     const cleanPhoneNumber = phoneNumber.trim().replace(/\s|-/g, '');
 
-    // Find user by phone number using projected fields and index hint
-    const user = await User.findOne({ phoneNumber: cleanPhoneNumber })
+    // Find all users with this phone number, sorted by newest first
+    // This handles duplicate accounts that may exist in the database
+    const users = await User.find({ phoneNumber: cleanPhoneNumber })
       .select('_id phoneNumber email name role address password')
+      .sort({ createdAt: -1 })
+      .limit(5)
       .maxTimeMS(5000)
       .lean();
-    
-    if (!user) {
+
+    if (!users || users.length === 0) {
       res.status(401).json({ success: false, message: 'Утасны дугаар эсвэл нууц үг буруу байна' });
       return;
     }
 
-    // Verify password (4-digit password)
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    
-    if (!isPasswordValid) {
+    // Try each user's password (handles duplicate accounts)
+    let matchedUser = null;
+    for (const u of users) {
+      if (u.password === 'clerk-managed') continue; // Skip clerk-managed (unhashed)
+      try {
+        const valid = await bcrypt.compare(password, u.password);
+        if (valid) { matchedUser = u; break; }
+      } catch { continue; }
+    }
+
+    if (!matchedUser) {
       res.status(401).json({ success: false, message: 'Утасны дугаар эсвэл нууц үг буруу байна' });
       return;
     }
-
-    // Note: Email verification is not required for login
-    // Phone number is used for login, email is for verification (but not enforced on login)
 
     // Generate JWT token
-    const token = generateToken(user._id.toString());
+    const token = generateToken(matchedUser._id.toString());
 
     res.json({
       success: true,
       message: 'Нэвтрэх амжилттай',
       token,
       user: {
-        id: user._id.toString(),
-        phoneNumber: user.phoneNumber,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        address: user.address
+        id: matchedUser._id.toString(),
+        phoneNumber: matchedUser.phoneNumber,
+        email: matchedUser.email,
+        name: matchedUser.name,
+        role: matchedUser.role,
+        address: matchedUser.address
       }
     });
   } catch (error: any) {
@@ -361,7 +376,7 @@ export const clerkSync = async (req: Request, res: Response): Promise<void> => {
         phoneNumber: cleanPhoneNumber || 'not-set',
         email: normalizedEmail || 'not-set@example.com',
         name: trimmedName || 'Хэрэглэгч',
-        password: 'clerk-managed',
+        password: await bcrypt.hash('clerk-managed-' + Date.now(), 10),
         role: isFirstAdmin ? 'admin' : 'user',
         isEmailVerified: true,
       });
