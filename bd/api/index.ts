@@ -98,11 +98,19 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/public', publicRoutes);
 
-// Health check (no database required)
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+// Health check — also warms up the database connection so real requests don't cold-start
+app.get('/api/health', async (req, res) => {
+  let dbStatus = 'disconnected';
+  try {
+    await connectToDatabase();
+    dbStatus = 'connected';
+  } catch (_e) {
+    dbStatus = 'error';
+  }
+  res.json({
+    status: 'ok',
     message: 'Server is running',
+    db: dbStatus,
     timestamp: new Date().toISOString(),
     env: process.env.NODE_ENV || 'production'
   });
@@ -112,21 +120,9 @@ app.get('/api/health', (req, res) => {
 app.use(errorHandler);
 
 // Database connection cache for serverless
-let cachedConnection: any = null;
-
 async function connectToDatabase() {
-  if (cachedConnection) {
-    return cachedConnection;
-  }
-
   try {
-    const mongoURI = process.env.MONGODB_URI;
-    if (!mongoURI) {
-      throw new Error('MONGODB_URI environment variable is not set');
-    }
-    
-    cachedConnection = await connectDB();
-    return cachedConnection;
+    await connectDB();
   } catch (error) {
     console.error('Database connection failed:', error);
     throw error;
@@ -156,19 +152,20 @@ export default async function handler(req: express.Request, res: express.Respons
   };
 
   try {
-    // Skip database connection for health check
-    const isHealthCheck = req.url === '/api/health' || req.url?.startsWith('/api/health');
-    
-    if (!isHealthCheck) {
-      // Connect to database with balanced timeout for cold starts.
-      try {
-        await Promise.race([
-          connectToDatabase(),
-          new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('Database connection timeout after 7 seconds')), 7000)
-          )
-        ]);
-      } catch (dbError: any) {
+    // Connect to database for all requests (including health check to keep DB warm)
+    try {
+      await Promise.race([
+        connectToDatabase(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Database connection timeout after 7 seconds')), 7000)
+        )
+      ]);
+    } catch (dbError: any) {
+      // Health check can still respond even if DB fails
+      const isHealthCheck = req.url === '/api/health' || req.url?.startsWith('/api/health');
+      if (isHealthCheck) {
+        // Let the health check route handler respond (it reports db status)
+      } else {
         cleanup();
         console.error('Database connection failed:', dbError.message);
         if (!res.headersSent) {
@@ -178,7 +175,7 @@ export default async function handler(req: express.Request, res: express.Respons
             error: process.env.NODE_ENV === 'development' ? dbError.message : undefined
           });
         }
-        return; // CRITICAL: Return immediately to prevent further execution
+        return;
       }
     }
     

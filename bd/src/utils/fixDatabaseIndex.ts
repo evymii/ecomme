@@ -46,21 +46,10 @@ export const fixDatabaseIndexes = async (): Promise<void> => {
       }
     }
 
-    // Ensure required indexes exist (non-unique, allowing duplicates)
+    // Ensure required indexes exist (non-unique for queries)
     try {
-      // Drop existing unique indexes if they exist
-      try {
-        await usersCollection.dropIndex('phoneNumber_1');
-        console.log('✅ Dropped old unique phoneNumber index');
-      } catch (dropError: any) {
-        // Index might not exist, that's okay
-        if (dropError.code !== 27) { // 27 = index not found
-          console.log('Note: phoneNumber index drop:', dropError.message);
-        }
-      }
-      
       await usersCollection.createIndex({ phoneNumber: 1 }, { unique: false });
-      console.log('✅ phoneNumber index verified (non-unique)');
+      console.log('✅ phoneNumber index verified');
     } catch (error: any) {
       if (error.code !== 85) { // 85 = index already exists
         console.error('Error creating phoneNumber index:', error.message);
@@ -68,19 +57,8 @@ export const fixDatabaseIndexes = async (): Promise<void> => {
     }
 
     try {
-      // Drop existing unique indexes if they exist
-      try {
-        await usersCollection.dropIndex('email_1');
-        console.log('✅ Dropped old unique email index');
-      } catch (dropError: any) {
-        // Index might not exist, that's okay
-        if (dropError.code !== 27) { // 27 = index not found
-          console.log('Note: email index drop:', dropError.message);
-        }
-      }
-      
       await usersCollection.createIndex({ email: 1 }, { unique: false });
-      console.log('✅ email index verified (non-unique)');
+      console.log('✅ email index verified');
     } catch (error: any) {
       if (error.code !== 85) {
         console.error('Error creating email index:', error.message);

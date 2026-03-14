@@ -34,6 +34,14 @@ api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     let token = localStorage.getItem('token');
     if (!token) {
+      // Try cookie fallback (Safari ITP can clear localStorage)
+      const match = document.cookie.match(/(?:^|; )auth_token=([^;]*)/);
+      if (match) {
+        token = match[1];
+        localStorage.setItem('token', token); // Restore to localStorage
+      }
+    }
+    if (!token) {
       try {
         const persisted = localStorage.getItem('auth-storage');
         if (persisted) {
