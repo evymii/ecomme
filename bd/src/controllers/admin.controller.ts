@@ -38,7 +38,7 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<vo
             count: { $sum: 1 },
           },
         },
-      ]).maxTimeMS(5000),
+      ]).option({ maxTimeMS: 5000 }),
     ]);
 
     const stats = revenueResult[0] || { revenue: 0, count: 0 };
