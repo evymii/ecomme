@@ -15,6 +15,7 @@ import Loader from '@/components/ui/Loader';
 import { PageLoader } from '@/components/ui/Loader';
 import { Trash2, KeyRound } from 'lucide-react';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
+import { getCache, setCache, clearCache } from '@/lib/admin-cache';
 
 interface User {
   _id: string;
@@ -38,7 +39,26 @@ export default function AdminUsersPage() {
   const [newPassword, setNewPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
 
-  const fetchUsers = useCallback(async () => {
+  const CACHE_KEY = 'admin_users';
+
+  const fetchUsers = useCallback(async (skipCache = false) => {
+    if (!skipCache) {
+      const cached = getCache<User[]>(CACHE_KEY, 60_000);
+      if (cached) {
+        setUsers(cached);
+        setLoading(false);
+        api.get('/admin/users')
+          .then(res => {
+            if (res.data?.success) {
+              setUsers(res.data.users || []);
+              setCache(CACHE_KEY, res.data.users || []);
+            }
+          })
+          .catch(() => {});
+        return;
+      }
+    }
+
     try {
       const response = await api.get('/admin/users');
       if (!response.data?.success) {
@@ -49,7 +69,9 @@ export default function AdminUsersPage() {
         });
         return;
       }
-      setUsers(response.data.users || []);
+      const data = response.data.users || [];
+      setUsers(data);
+      setCache(CACHE_KEY, data);
     } catch (error: any) {
       console.error('Error fetching users:', error);
       toast({
@@ -77,6 +99,7 @@ export default function AdminUsersPage() {
 
     try {
       await api.put(`/admin/users/${userId}/role`, { role: newRole });
+      clearCache(CACHE_KEY);
       toast({
         title: 'Амжилттай',
         description: `Эрх "${newRole === 'admin' ? 'Админ' : 'Хэрэглэгч'}" болгож шинэчлэгдлээ`,
@@ -98,6 +121,7 @@ export default function AdminUsersPage() {
 
     try {
       await api.delete(`/admin/users/${user._id}`);
+      clearCache(CACHE_KEY);
       setUsers((prev) => prev.filter((u) => u._id !== user._id));
       toast({
         title: 'Амжилттай',

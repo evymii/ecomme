@@ -209,7 +209,6 @@ export default function Header() {
                       alt={product.name}
                       fill
                       className="object-cover"
-                      unoptimized
                       sizes="44px"
                     />
                   ) : (

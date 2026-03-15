@@ -12,6 +12,7 @@ import { Edit, Trash2 } from 'lucide-react';
 import Loader from '@/components/ui/Loader';
 import { PageLoader } from '@/components/ui/Loader';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
+import { getCache, setCache, clearCache } from '@/lib/admin-cache';
 
 interface Category {
   _id: string;
@@ -30,7 +31,27 @@ export default function AdminCategoriesPage() {
   const { isAdmin, isChecking } = useAdminAuth();
   const { toast } = useToast();
 
-  const fetchCategories = useCallback(async () => {
+  const CACHE_KEY = 'admin_categories';
+
+  const fetchCategories = useCallback(async (skipCache = false) => {
+    // Try cache first
+    if (!skipCache) {
+      const cached = getCache<Category[]>(CACHE_KEY, 120_000);
+      if (cached) {
+        setCategories(cached);
+        setLoading(false);
+        api.get('/admin/categories')
+          .then(res => {
+            if (res.data?.success) {
+              setCategories(res.data.categories || []);
+              setCache(CACHE_KEY, res.data.categories || []);
+            }
+          })
+          .catch(() => {});
+        return;
+      }
+    }
+
     try {
       const response = await api.get('/admin/categories');
       if (!response.data?.success) {
@@ -41,7 +62,9 @@ export default function AdminCategoriesPage() {
         });
         return;
       }
-      setCategories(response.data.categories || []);
+      const data = response.data.categories || [];
+      setCategories(data);
+      setCache(CACHE_KEY, data);
     } catch (error: any) {
       console.error('Error fetching categories:', error);
       toast({
@@ -73,7 +96,8 @@ export default function AdminCategoriesPage() {
         title: 'Амжилттай',
         description: 'Ангилал устгагдлаа',
       });
-      fetchCategories();
+      clearCache(CACHE_KEY);
+      fetchCategories(true);
     } catch (error: any) {
       toast({
         title: 'Алдаа',
@@ -183,7 +207,7 @@ export default function AdminCategoriesPage() {
           open={modalOpen}
           onOpenChange={setModalOpen}
           category={editingCategory}
-          onSuccess={fetchCategories}
+          onSuccess={() => { clearCache(CACHE_KEY); fetchCategories(true); }}
         />
       </main>
     </div>

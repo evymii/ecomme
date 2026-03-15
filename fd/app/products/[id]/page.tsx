@@ -87,19 +87,18 @@ export default function ProductDetailPage() {
             // First try: same category
             if (productData.category) {
               const encodedCategory = encodeURIComponent(productData.category);
-              const similarResponse = await api.get(`/products/category/${encodedCategory}`);
+              const similarResponse = await api.get(`/products/category/${encodedCategory}?page=1&limit=8`);
               similar = (similarResponse.data.products || []).filter(
                 (p: Product) => p._id !== productId
               );
             }
 
-            // Fallback: if not enough from same category, fetch all products
+            // Fallback: if not enough from same category, fetch some products
             if (similar.length < 4) {
-              const allResponse = await api.get('/products');
+              const allResponse = await api.get('/products?page=1&limit=8');
               const allOther = (allResponse.data.products || []).filter(
                 (p: Product) => p._id !== productId
               );
-              // Merge: category products first, then fill with others (no duplicates)
               const existingIds = new Set(similar.map((p: Product) => p._id));
               for (const p of allOther) {
                 if (!existingIds.has(p._id)) {
@@ -201,7 +200,6 @@ export default function ProductDetailPage() {
                           alt={`${product.name} - ${index + 1}`}
                           fill
                           className="object-cover"
-                          unoptimized
                           sizes="80px"
                         />
                       </button>
@@ -220,7 +218,6 @@ export default function ProductDetailPage() {
                       fill
                       className="object-cover"
                       priority
-                      unoptimized
                       sizes="(max-width: 768px) 80vw, (max-width: 1024px) 45vw, 40vw"
                     />
                   ) : (

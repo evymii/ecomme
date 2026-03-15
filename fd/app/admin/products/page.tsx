@@ -15,6 +15,7 @@ import { Search, X } from 'lucide-react';
 import Loader from '@/components/ui/Loader';
 import { PageLoader } from '@/components/ui/Loader';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
+import { getCache, setCache, clearCache } from '@/lib/admin-cache';
 
 interface ProductImage {
   url: string;
@@ -79,7 +80,39 @@ export default function AdminProductsPage() {
     );
   });
 
-  const fetchProducts = useCallback(async () => {
+  const CACHE_KEY = 'admin_products';
+
+  const normalizeProducts = (raw: any[]): Product[] =>
+    raw.map((product: any) => ({
+      ...product,
+      images: (product.images || []).map((img: any, index: number) => ({
+        url: img.url,
+        isMain: img.isMain || false,
+        order: img.order !== undefined ? img.order : index,
+      })),
+    }));
+
+  const fetchProducts = useCallback(async (skipCache = false) => {
+    // Try cache first
+    if (!skipCache) {
+      const cached = getCache<Product[]>(CACHE_KEY, 60_000);
+      if (cached) {
+        setProducts(cached);
+        setLoading(false);
+        // Background refresh
+        api.get('/admin/products', { timeout: 25000 })
+          .then(res => {
+            if (res.data?.success) {
+              const normalized = normalizeProducts(res.data.products || []);
+              setProducts(normalized);
+              setCache(CACHE_KEY, normalized);
+            }
+          })
+          .catch(() => {});
+        return;
+      }
+    }
+
     try {
       const response = await api.get('/admin/products', { timeout: 25000 });
       if (!response.data?.success) {
@@ -90,16 +123,9 @@ export default function AdminProductsPage() {
         });
         return;
       }
-      // Normalize products to ensure images have order property
-      const normalizedProducts = (response.data.products || []).map((product: any) => ({
-        ...product,
-        images: (product.images || []).map((img: any, index: number) => ({
-          url: img.url,
-          isMain: img.isMain || false,
-          order: img.order !== undefined ? img.order : index,
-        })),
-      }));
-      setProducts(normalizedProducts);
+      const normalized = normalizeProducts(response.data.products || []);
+      setProducts(normalized);
+      setCache(CACHE_KEY, normalized);
     } catch (error: any) {
       console.error('Error fetching products:', error);
       if (await handleAdminAuthError(error)) {
@@ -154,7 +180,8 @@ export default function AdminProductsPage() {
     if (!confirm('Энэ барааг устгахдаа итгэлтэй байна уу?')) return;
     try {
       await api.delete(`/admin/products/${id}`);
-      fetchProducts();
+      clearCache(CACHE_KEY);
+      fetchProducts(true);
     } catch (error: any) {
       console.error('Error deleting product:', error);
       if (await handleAdminAuthError(error)) {
@@ -303,7 +330,7 @@ export default function AdminProductsPage() {
           open={modalOpen}
           onOpenChange={setModalOpen}
           product={editingProduct}
-          onSuccess={fetchProducts}
+          onSuccess={() => { clearCache(CACHE_KEY); fetchProducts(true); }}
         />
       </main>
     </div>

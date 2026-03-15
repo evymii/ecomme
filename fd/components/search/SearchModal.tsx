@@ -131,7 +131,6 @@ export default function SearchModal({ open, onOpenChange }: SearchModalProps) {
                           alt={product.name}
                           fill
                           className="object-cover"
-                          unoptimized
                           sizes="56px"
                         />
                       ) : (

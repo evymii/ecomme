@@ -109,7 +109,6 @@ export default function CartSidebar({ open, onOpenChange }: CartSidebarProps) {
                           alt={item.name}
                           fill
                           className="object-cover rounded"
-                          unoptimized
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-400">

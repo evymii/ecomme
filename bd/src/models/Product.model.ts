@@ -88,9 +88,9 @@ const ProductSchema = new Schema<IProduct>(
   }
 );
 
+// Text index for search (name + code)
+ProductSchema.index({ name: 'text', code: 'text' });
 // Indexes for faster queries
-// Note: code already has unique: true in field definition, so no need to index it again
-ProductSchema.index({ name: 1 }); // Index for search by name
 ProductSchema.index({ category: 1 });
 ProductSchema.index({ 'features.isFeatured': 1 });
 ProductSchema.index({ 'features.isNew': 1 });

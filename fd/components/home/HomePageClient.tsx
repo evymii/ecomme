@@ -85,10 +85,10 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
 
     try {
       setLoading(true);
-      const response = await api.get(`/products/category/${category._id}?page=1&limit=100`);
+      const response = await api.get(`/products/category/${category._id}?page=1&limit=16`);
       setAllProducts(response.data.products || []);
       setCurrentPage(1);
-      setHasMoreProducts(false);
+      setHasMoreProducts(response.data.pagination?.hasMore || false);
     } catch (error) {
       console.error('Error fetching category products:', error);
       setAllProducts([]);
@@ -100,12 +100,19 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
   };
 
   const loadMoreProducts = async () => {
-    if (selectedCategory !== 'Бүгд') return;
     if (loadingMore || !hasMoreProducts) return;
     try {
       setLoadingMore(true);
       const nextPage = currentPage + 1;
-      const response = await api.get(`/products?page=${nextPage}&limit=12`);
+      let url: string;
+      if (selectedCategory === 'Бүгд') {
+        url = `/products?page=${nextPage}&limit=16`;
+      } else {
+        const category = categories.find((c) => c.name === selectedCategory);
+        if (!category) return;
+        url = `/products/category/${category._id}?page=${nextPage}&limit=16`;
+      }
+      const response = await api.get(url);
       const nextProducts = response.data?.products || [];
       const hasMore = !!response.data?.pagination?.hasMore;
       setAllProducts((prev) => {
@@ -128,7 +135,6 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
   };
 
   useEffect(() => {
-    if (selectedCategory !== 'Бүгд') return;
     if (!hasMoreProducts) return;
     const target = loadMoreTriggerRef.current;
     if (!target) return;
@@ -301,15 +307,13 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
                   <ProductCard key={product._id} product={product} />
                 ))}
               </div>
-              {selectedCategory === 'Бүгд' && (
-                <div ref={loadMoreTriggerRef} className="h-10 mt-6 flex items-center justify-center">
-                  {loadingMore ? (
-                    <span className="text-sm text-[#5D737E] font-light">Илүү бүтээгдэхүүн ачаалж байна...</span>
-                  ) : hasMoreProducts ? (
-                    <span className="text-xs text-[#5D737E] font-light">Доош гүйлгэж үргэлжлүүлэн ачаална</span>
-                  ) : null}
-                </div>
-              )}
+              <div ref={loadMoreTriggerRef} className="h-10 mt-6 flex items-center justify-center">
+                {loadingMore ? (
+                  <span className="text-sm text-[#5D737E] font-light">Ачаалж байна...</span>
+                ) : hasMoreProducts ? (
+                  <span className="text-xs text-[#5D737E] font-light">Доош гүйлгэж үргэлжлүүлэн ачаална</span>
+                ) : null}
+              </div>
             </>
           ) : loading ? (
             showLoader ? <PageLoader /> : null

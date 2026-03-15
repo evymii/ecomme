@@ -16,6 +16,7 @@ import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useToast } from '@/hooks/use-toast';
 import OrderReceipt from '@/components/admin/OrderReceipt';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
+import { getCache, setCache, clearCache } from '@/lib/admin-cache';
 
 interface Order {
   _id: string;
@@ -142,20 +143,51 @@ export default function AdminOrdersPage() {
     setSelectedOrderIds((prev) => prev.filter((id) => visibleIds.has(id)));
   }, [displayedOrders]);
 
-  const fetchOrders = useCallback(async ({ showErrorToast = true }: { showErrorToast?: boolean } = {}) => {
+  const getCacheKey = useCallback(() => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('s', startDate);
+    if (endDate) params.append('e', endDate);
+    if (searchFilter) params.append('q', searchFilter);
+    return `admin_orders_${params.toString()}`;
+  }, [startDate, endDate, searchFilter]);
+
+  const fetchOrders = useCallback(async ({ showErrorToast = true, skipCache = false }: { showErrorToast?: boolean; skipCache?: boolean } = {}) => {
+    const cacheKey = getCacheKey();
+
+    // Try cache first (only on initial load, not after mutations)
+    if (!skipCache) {
+      const cached = getCache<Order[]>(cacheKey, 30_000);
+      if (cached) {
+        setOrders(cached);
+        setLoading(false);
+        // Background refresh
+        api.get(`/admin/orders?${new URLSearchParams({ ...(startDate && { startDate }), ...(endDate && { endDate }), ...(searchFilter && { search: searchFilter }) }).toString()}`, { timeout: 30000 })
+          .then(res => {
+            if (res.data.success) {
+              setOrders(res.data.orders || []);
+              setCache(cacheKey, res.data.orders || []);
+            }
+          })
+          .catch(() => {});
+        return true;
+      }
+    }
+
     try {
       setLoading(true);
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
       if (searchFilter) params.append('search', searchFilter);
-      
+
       const response = await api.get(`/admin/orders?${params.toString()}`, {
         timeout: 30000,
       });
-      
+
       if (response.data.success) {
-        setOrders(response.data.orders || []);
+        const ordersData = response.data.orders || [];
+        setOrders(ordersData);
+        setCache(cacheKey, ordersData);
         return true;
       } else {
         if (showErrorToast) {
@@ -190,7 +222,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, searchFilter, toast]);
+  }, [startDate, endDate, searchFilter, toast, getCacheKey]);
 
   useEffect(() => {
     if (isAdmin && !isChecking) {
@@ -201,7 +233,8 @@ export default function AdminOrdersPage() {
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
       await api.put(`/admin/orders/${orderId}/status`, { status: newStatus });
-      const refreshed = await fetchOrders({ showErrorToast: false });
+      clearCache(getCacheKey());
+      const refreshed = await fetchOrders({ showErrorToast: false, skipCache: true });
       toast({
         title: 'Амжилттай',
         description: refreshed
@@ -232,7 +265,8 @@ export default function AdminOrdersPage() {
         setIsDetailsOpen(false);
         setSelectedOrder(null);
       }
-      await fetchOrders({ showErrorToast: false });
+      clearCache(getCacheKey());
+      await fetchOrders({ showErrorToast: false, skipCache: true });
       setSelectedOrderIds((prev) => prev.filter((id) => id !== orderId));
     } catch (error: any) {
       console.error('Delete single order failed:', {
@@ -327,7 +361,8 @@ export default function AdminOrdersPage() {
         variant: deletedCount > 0 ? undefined : 'destructive',
       });
 
-      await fetchOrders({ showErrorToast: false });
+      clearCache(getCacheKey());
+      await fetchOrders({ showErrorToast: false, skipCache: true });
     } catch (error: any) {
       console.error('Delete selected orders failed:', {
         message: error?.message,
@@ -406,6 +441,7 @@ export default function AdminOrdersPage() {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="container mx-auto px-3 md:px-4 py-4 md:py-8">
+
         <div className="flex flex-col gap-3 md:gap-4 md:flex-row md:items-center mb-4 md:mb-8">
           <div className="md:flex-1 md:flex md:justify-start">
             <h1 className="text-xl md:text-3xl font-semibold md:font-bold">Захиалга</h1>

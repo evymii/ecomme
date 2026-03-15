@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,7 @@ export default function CheckoutPage() {
   });
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pay_later');
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderCode, setOrderCode] = useState('');
   const [orderId, setOrderId] = useState('');
@@ -121,9 +122,14 @@ export default function CheckoutPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    // Prevent double submission
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     // Validate required fields
     if (!formData.phoneNumber || !formData.phoneNumber.trim()) {
+      submittingRef.current = false;
       toast({
         title: 'Алдаа',
         description: 'Утасны дугаар оруулна уу',
@@ -131,8 +137,9 @@ export default function CheckoutPage() {
       });
       return;
     }
-    
+
     if (!formData.email || !formData.email.trim()) {
+      submittingRef.current = false;
       toast({
         title: 'Алдаа',
         description: 'Имэйл хаяг оруулна уу',
@@ -140,8 +147,9 @@ export default function CheckoutPage() {
       });
       return;
     }
-    
+
     if (!formData.address || !formData.address.trim()) {
+      submittingRef.current = false;
       toast({
         title: 'Алдаа',
         description: 'Хүргэлтийн хаяг оруулна уу',
@@ -169,25 +177,15 @@ export default function CheckoutPage() {
         customerName: user?.name || undefined,
       };
 
-      console.log('Submitting order:', orderData);
-
       // Use longer timeout to reduce false client-side timeout errors
       const response = await api.post('/orders', orderData, {
         timeout: 30000,
       });
 
-      console.log('Order response:', response.data);
-
       if (response.data && response.data.success && response.data.order) {
         const order = response.data.order;
         const code = order.orderCode || '-';
         const orderIdValue = order._id?.toString() || '';
-        
-        console.log('Order created successfully:', { 
-          orderId: orderIdValue, 
-          orderCode: code,
-          order: order 
-        });
         
         // Set all success states FIRST - this prevents redirect
         setOrderCode(code);
@@ -205,7 +203,6 @@ export default function CheckoutPage() {
           duration: 5000,
         });
       } else {
-        console.error('Invalid order response:', response.data);
         throw new Error(response.data?.message || 'Захиалгын мэдээлэл буруу байна');
       }
     } catch (error: any) {
@@ -259,6 +256,9 @@ export default function CheckoutPage() {
       });
     } finally {
       setLoading(false);
+      if (!orderSuccess) {
+        submittingRef.current = false;
+      }
     }
   };
 
@@ -422,9 +422,9 @@ export default function CheckoutPage() {
                     <div className="mt-3 md:mt-4 p-3 md:p-4 bg-blue-50 rounded-lg border border-blue-200">
                       <p className="text-xs md:text-sm font-semibold mb-2">Банкны мэдээлэл:</p>
                       <div className="text-xs md:text-sm text-gray-700 space-y-1">
-                        <p><strong>Банк:</strong> ХААН банк</p>
-                        <p><strong>Данс:</strong> 5145544332</p>
-                        <p><strong>Эзэмшигч:</strong> AzSouviner</p>
+                        <p><strong>Банк:</strong> {process.env.NEXT_PUBLIC_BANK_NAME || 'ХААН банк'}</p>
+                        <p><strong>Данс:</strong> {process.env.NEXT_PUBLIC_BANK_ACCOUNT || ''}</p>
+                        <p><strong>Эзэмшигч:</strong> {process.env.NEXT_PUBLIC_BANK_HOLDER || ''}</p>
                         <p className="mt-2 text-[10px] md:text-xs text-gray-600">
                           Төлбөрийн ул мөр хуулгаар төлбөр илгээснийг тэмдэглэнэ үү
                         </p>

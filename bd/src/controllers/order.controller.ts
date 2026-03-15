@@ -249,7 +249,7 @@ export const getUserOrders = async (req: AuthRequest, res: Response): Promise<vo
     }
 
     const orders = await Order.find({ $or: query })
-      .populate('items.product')
+      .populate('items.product', 'name price code images')
       .sort({ createdAt: -1 })
       .lean();
 
