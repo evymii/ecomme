@@ -27,7 +27,7 @@ async function getHomeData(): Promise<HomeData> {
     featuredProducts: [],
     discountedProducts: [],
     allProducts: [],
-    allProductsPagination: { page: 1, limit: 12, total: 0, totalPages: 1, hasMore: false },
+    allProductsPagination: { page: 1, limit: 16, total: 0, totalPages: 1, hasMore: false },
     categories: [],
   };
   const apiBase = getApiBaseUrl();
@@ -37,7 +37,7 @@ async function getHomeData(): Promise<HomeData> {
       const [featuredRes, discountedRes, productsRes, categoriesRes] = await Promise.all([
         fetch(`${apiBase}/products/featured`, { next: { revalidate: 60 } }),
         fetch(`${apiBase}/products/discounted`, { next: { revalidate: 60 } }),
-        fetch(`${apiBase}/products?page=1&limit=12`, { next: { revalidate: 60 } }),
+        fetch(`${apiBase}/products?page=1&limit=16`, { next: { revalidate: 60 } }),
         fetch(`${apiBase}/categories`, { next: { revalidate: 60 } }),
       ]);
 
@@ -52,7 +52,7 @@ async function getHomeData(): Promise<HomeData> {
         featuredProducts: featuredData?.products || [],
         discountedProducts: discountedData?.products || [],
         allProducts: productsData?.products || [],
-        allProductsPagination: productsData?.pagination || { page: 1, limit: 12, total: 0, totalPages: 1, hasMore: false },
+        allProductsPagination: productsData?.pagination || { page: 1, limit: 16, total: 0, totalPages: 1, hasMore: false },
         categories: categoriesData?.categories || [],
       };
     } catch {
@@ -73,7 +73,7 @@ async function getHomeData(): Promise<HomeData> {
       featuredProducts: data.featuredProducts || [],
       discountedProducts: data.discountedProducts || [],
       allProducts: data.allProducts || [],
-      allProductsPagination: data.allProductsPagination || { page: 1, limit: 12, total: 0, totalPages: 1, hasMore: false },
+      allProductsPagination: data.allProductsPagination || { page: 1, limit: 16, total: 0, totalPages: 1, hasMore: false },
       categories: data.categories || [],
     };
   } catch {

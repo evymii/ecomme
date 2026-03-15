@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -31,12 +31,19 @@ interface Category {
   name: string;
 }
 
+const PAGE_LIMIT = 16;
+
 function ProductsContent() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
   const showLoader = useDelayedLoading(loading, 250);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -61,17 +68,24 @@ function ProductsContent() {
     fetchCategories();
   }, []);
 
+  // Reset and fetch first page when category changes
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         setLoading(true);
+        setPage(1);
         let response;
         if (selectedCategoryId) {
-          response = await api.get(`/products/category/${selectedCategoryId}?page=1&limit=100`);
+          response = await api.get(`/products/category/${selectedCategoryId}?page=1&limit=${PAGE_LIMIT}`);
         } else {
-          response = await api.get('/products?page=1&limit=100');
+          response = await api.get(`/products?page=1&limit=${PAGE_LIMIT}`);
         }
         setProducts(response.data.products || []);
+        const pagination = response.data.pagination;
+        if (pagination) {
+          setHasMore(pagination.hasMore);
+          setTotal(pagination.total);
+        }
       } catch (error) {
         console.error('Error fetching products:', error);
       } finally {
@@ -81,6 +95,49 @@ function ProductsContent() {
 
     fetchProducts();
   }, [selectedCategoryId]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    try {
+      setLoadingMore(true);
+      const nextPage = page + 1;
+      let response;
+      if (selectedCategoryId) {
+        response = await api.get(`/products/category/${selectedCategoryId}?page=${nextPage}&limit=${PAGE_LIMIT}`);
+      } else {
+        response = await api.get(`/products?page=${nextPage}&limit=${PAGE_LIMIT}`);
+      }
+      const newProducts = response.data.products || [];
+      setProducts(prev => [...prev, ...newProducts]);
+      setPage(nextPage);
+      const pagination = response.data.pagination;
+      if (pagination) {
+        setHasMore(pagination.hasMore);
+      }
+    } catch (error) {
+      console.error('Error loading more products:', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [page, hasMore, loadingMore, selectedCategoryId]);
+
+  // Infinite scroll
+  useEffect(() => {
+    if (!hasMore) return;
+    const target = loadMoreRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadMore();
+        }
+      },
+      { rootMargin: '300px 0px' }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMore, page, loadingMore, selectedCategoryId]);
 
   const handleCategoryClick = (categoryId: string | null) => {
     setSelectedCategoryId(categoryId);
@@ -92,7 +149,7 @@ function ProductsContent() {
   };
 
   // Get current category name for display
-  const selectedCategoryName = selectedCategoryId 
+  const selectedCategoryName = selectedCategoryId
     ? categories.find(c => c._id === selectedCategoryId)?.name || 'Бүтээгдэхүүн'
     : 'Бүх бүтээгдэхүүн';
 
@@ -100,14 +157,14 @@ function ProductsContent() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
       {/* Page Title */}
       <div className="mb-6 md:mb-8">
-        <h1 
+        <h1
           className="text-2xl md:text-3xl text-[#02111B] tracking-tight mb-2"
           style={{ fontWeight: 600 }}
         >
           {selectedCategoryName}
         </h1>
         <p className="text-sm text-[#5D737E] font-light">
-          {products.length > 0 ? `${products.length} бүтээгдэхүүн` : ''}
+          {total > 0 ? `${total} бүтээгдэхүүн` : ''}
         </p>
       </div>
 
@@ -148,18 +205,25 @@ function ProductsContent() {
           <p className="text-[#5D737E] font-light">Бараа олдсонгүй</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
-          {products.map((product, index) => (
-            <ProductCard key={product._id} product={product} priority={index < 4} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
+            {products.map((product, index) => (
+              <ProductCard key={product._id} product={product} priority={index < 4} />
+            ))}
+          </div>
+
+          <div ref={loadMoreRef} className="h-10 mt-6 flex items-center justify-center">
+            {loadingMore ? (
+              <span className="text-sm text-[#5D737E] font-light">Ачаалж байна...</span>
+            ) : hasMore ? (
+              <span className="text-xs text-[#5D737E] font-light">Доош гүйлгэж үргэлжлүүлэн ачаална</span>
+            ) : null}
+          </div>
+        </>
       )}
     </div>
   );
 }
-
-// Force dynamic rendering since we use search params
-export const dynamic = 'force-dynamic';
 
 export default function ProductsPage() {
   const user = useAuthStore((state) => state.user);

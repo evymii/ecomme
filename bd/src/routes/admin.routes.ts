@@ -18,7 +18,6 @@ import {
   updateOrderStatus 
 } from '../controllers/admin.controller.js';
 import { getAllCategories, createCategory, updateCategory, deleteCategory } from '../controllers/category.controller.js';
-import { upload } from '../config/multer.js';
 
 const router = express.Router();
 
@@ -45,8 +44,8 @@ router.delete('/categories/:id', deleteCategory);
 
 // Products
 router.get('/products', getAllProducts);
-router.post('/products', upload.array('images', 10) as any, createProduct);
-router.put('/products/:id', upload.array('images', 10) as any, updateProduct);
+router.post('/products', createProduct);
+router.put('/products/:id', updateProduct);
 router.delete('/products/:id', deleteProduct);
 
 // Orders

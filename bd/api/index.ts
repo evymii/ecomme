@@ -1,6 +1,8 @@
 import express from 'express';
+import compression from 'compression';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 import { connectDB } from '../src/config/database.js';
 import authRoutes from '../src/routes/auth.routes.js';
 import userRoutes from '../src/routes/user.routes.js';
@@ -55,6 +57,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
+app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -89,8 +92,17 @@ app.get('/uploads/:folder/:filename', (req, res, next) => {
   next();
 });
 
+// Rate limiting for auth endpoints (prevent brute force)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 минут
+  max: 15, // 15 оролдлого
+  message: { success: false, message: 'Хэт олон оролдлого. 15 минутын дараа дахин оролдоно уу.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Routes
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);

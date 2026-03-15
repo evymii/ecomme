@@ -93,7 +93,6 @@ export default function FavoritesPage() {
                                 alt={product.name}
                                 fill
                                 className="object-cover"
-                                unoptimized
                                 sizes="96px"
                               />
                             ) : (

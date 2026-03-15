@@ -4,22 +4,23 @@ import type { NextRequest } from 'next/server';
 export default function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Protect /admin routes with our cookie-based check
+  // Protect /admin routes — check token cookie exists
+  // Actual admin role verification happens in useAdminAuth hook (calls backend /admin/check)
   if (pathname.startsWith('/admin')) {
-    const adminCookie = req.cookies.get('admin_verified')?.value;
-    if (!adminCookie) {
+    const token = req.cookies.get('auth_token')?.value;
+
+    if (!token) {
       const url = req.nextUrl.clone();
       url.pathname = '/';
       return NextResponse.redirect(url);
     }
+
+    return NextResponse.next();
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    // Only run middleware on admin routes
-    '/admin/:path*',
-  ],
+  matcher: ['/admin/:path*'],
 };

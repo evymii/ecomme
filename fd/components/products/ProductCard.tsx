@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ShoppingCart, Heart } from 'lucide-react';
 import { useCartStore } from '@/store/cart-store';
 import { useFavoritesStore } from '@/store/favorites-store';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo, useCallback } from 'react';
 import { getImageUrl } from '@/lib/image-utils';
 
 interface Product {
@@ -29,31 +29,25 @@ interface ProductCardProps {
   categoryName?: string;
 }
 
-export default function ProductCard({ product, priority = false, categoryName }: ProductCardProps) {
+function ProductCard({ product, priority = false, categoryName }: ProductCardProps) {
   const router = useRouter();
-  const [quantity] = useState(1);
   const addItem = useCartStore((state) => state.addItem);
   const toggleFavorite = useFavoritesStore((state) => state.toggleFavorite);
-  const favItems = useFavoritesStore((state) => state.items);
-  const [isFav, setIsFav] = useState(false);
+  const isFav = useFavoritesStore((state) => state.items.some(item => item._id === product._id));
   const mainImage = product.images.find(img => img.isMain) || product.images[0];
 
-  useEffect(() => {
-    setIsFav(favItems.some(item => item._id === product._id));
-  }, [favItems, product._id]);
-
-  const handleAddToCart = (e: React.MouseEvent) => {
+  const handleAddToCart = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     addItem({
       productId: product._id,
       name: product.name,
       price: product.price,
-      quantity,
+      quantity: 1,
       image: mainImage?.url,
     });
-  };
+  }, [addItem, product._id, product.name, product.price, mainImage?.url]);
 
-  const handleToggleFavorite = (e: React.MouseEvent) => {
+  const handleToggleFavorite = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     toggleFavorite({
       _id: product._id,
@@ -63,11 +57,11 @@ export default function ProductCard({ product, priority = false, categoryName }:
       image: mainImage?.url,
       category: product.category,
     });
-  };
+  }, [toggleFavorite, product._id, product.name, product.price, product.code, mainImage?.url, product.category]);
 
-  const handleCardClick = () => {
+  const handleCardClick = useCallback(() => {
     router.push(`/products/${product._id}`);
-  };
+  }, [router, product._id]);
 
   const isOutOfStock = product.stock !== undefined && product.stock === 0;
 
@@ -83,7 +77,7 @@ export default function ProductCard({ product, priority = false, categoryName }:
   const badge = getBadge();
 
   return (
-    <div 
+    <div
       className="group relative bg-white rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-xl border border-[#02111B]/5 cursor-pointer flex flex-col h-full"
       onClick={handleCardClick}
     >
@@ -138,7 +132,7 @@ export default function ProductCard({ product, priority = false, categoryName }:
 
         {/* Quick Add Button */}
         {!isOutOfStock && (
-          <button 
+          <button
             onClick={handleAddToCart}
             className="absolute bottom-2.5 right-2.5 md:bottom-3 md:right-3 w-9 h-9 md:w-10 md:h-10 bg-[#02111B] text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-[#3F4045] hover:scale-110 shadow-lg z-10"
           >
@@ -158,7 +152,7 @@ export default function ProductCard({ product, priority = false, categoryName }:
           <span className="font-semibold text-[#02111B] tracking-tight text-sm md:text-base" style={{ fontWeight: 600 }}>
             ₮{product.price.toLocaleString()}
           </span>
-          <button 
+          <button
             onClick={(e) => { e.stopPropagation(); handleCardClick(); }}
             className="text-[#5D737E] hover:text-[#02111B] transition-colors text-[10px] md:text-xs font-light hidden md:block"
           >
@@ -169,3 +163,5 @@ export default function ProductCard({ product, priority = false, categoryName }:
     </div>
   );
 }
+
+export default memo(ProductCard);

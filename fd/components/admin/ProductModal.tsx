@@ -17,6 +17,7 @@ import api from '@/lib/api';
 import Image from 'next/image';
 import { Star, X, Upload } from 'lucide-react';
 import { getImageUrl } from '@/lib/image-utils';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 
 interface ProductImage {
   url: string;
@@ -33,6 +34,7 @@ interface Product {
   price: number;
   category: string;
   stock: number;
+  sizes?: string[];
   images: ProductImage[];
   features: {
     isNew: boolean;
@@ -67,14 +69,16 @@ export default function ProductModal({
       isDiscounted: false,
     },
   });
+  const [sizes, setSizes] = useState<string[]>([]);
+  const [sizeInput, setSizeInput] = useState('');
   const [images, setImages] = useState<ProductImage[]>([]);
   const [mainImageIndex, setMainImageIndex] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
   const [categories, setCategories] = useState<Array<{ _id: string; name: string }>>([]);
   const { toast } = useToast();
 
   useEffect(() => {
-    // Fetch categories
     const fetchCategories = async () => {
       try {
         const response = await api.get('/admin/categories');
@@ -100,6 +104,7 @@ export default function ProductModal({
         stock: product.stock.toString(),
         features: product.features,
       });
+      setSizes(product.sizes || []);
       setImages(product.images || []);
       const mainIdx = product.images.findIndex(img => img.isMain);
       setMainImageIndex(mainIdx >= 0 ? mainIdx : 0);
@@ -117,9 +122,12 @@ export default function ProductModal({
           isDiscounted: false,
         },
       });
+      setSizes([]);
       setImages([]);
       setMainImageIndex(0);
     }
+    setSizeInput('');
+    setUploadProgress('');
   }, [product, open, toast]);
 
   const handleFileSelect = useCallback((files: FileList | null) => {
@@ -168,8 +176,7 @@ export default function ProductModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validation
+
     if (!formData.code || !formData.name || !formData.description || !formData.price || !formData.category || !formData.stock) {
       toast({
         title: 'Алдаа',
@@ -179,8 +186,7 @@ export default function ProductModal({
       return;
     }
 
-    // For new products, require at least one image
-    if (!product && images.length === 0) {
+    if (images.length === 0) {
       toast({
         title: 'Алдаа',
         description: 'Хамгийн багадаа 1 зураг оруулна уу',
@@ -189,56 +195,54 @@ export default function ProductModal({
       return;
     }
 
-    // For existing products, require at least one image (existing or new)
-    if (product && images.length === 0) {
-      toast({
-        title: 'Алдаа',
-        description: 'Хамгийн багадаа 1 зураг байх ёстой',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     setLoading(true);
     try {
-      const formDataToSend = new FormData();
-      formDataToSend.append('code', formData.code.trim());
-      formDataToSend.append('name', formData.name.trim());
-      formDataToSend.append('description', formData.description.trim());
-      formDataToSend.append('price', formData.price.toString());
-      formDataToSend.append('category', formData.category.trim());
-      formDataToSend.append('stock', formData.stock.toString());
-      formDataToSend.append('mainImageIndex', mainImageIndex.toString());
-      formDataToSend.append('features', JSON.stringify(formData.features));
-
-      // Separate new files from existing images
-      const filesToUpload = images.filter(img => img.file);
+      // Upload new files directly to Cloudinary
+      const newFiles = images.filter(img => img.file);
       const existingImages = images.filter(img => !img.file);
 
-      // For updates: always send existing images data
-      if (product) {
-        formDataToSend.append('existingImages', JSON.stringify(
-          existingImages.map((img, idx) => ({
-            url: img.url,
-            isMain: false, // Will be set correctly on backend based on mainImageIndex
-            order: idx
-          }))
-        ));
+      const uploadedUrls: string[] = [];
+      if (newFiles.length > 0) {
+        for (let i = 0; i < newFiles.length; i++) {
+          setUploadProgress(`Зураг upload (${i + 1}/${newFiles.length})...`);
+          const url = await uploadToCloudinary(newFiles[i].file!);
+          uploadedUrls.push(url);
+        }
       }
 
-      // Append new files (if any)
-      filesToUpload.forEach((img) => {
-        if (img.file) {
-          formDataToSend.append('images', img.file);
-        }
-      });
+      // Build final images array with all URLs
+      const finalImages = [
+        ...existingImages.map((img, idx) => ({
+          url: img.url,
+          isMain: idx === mainImageIndex,
+          order: idx,
+        })),
+        ...uploadedUrls.map((url, idx) => ({
+          url,
+          isMain: (existingImages.length + idx) === mainImageIndex,
+          order: existingImages.length + idx,
+        })),
+      ];
 
-      // Don't set Content-Type header - let axios/browser set it automatically for FormData
+      setUploadProgress('Хадгалж байна...');
+
+      const payload = {
+        code: formData.code.trim(),
+        name: formData.name.trim(),
+        description: formData.description.trim(),
+        price: parseFloat(formData.price),
+        category: formData.category.trim(),
+        stock: parseInt(formData.stock, 10),
+        features: formData.features,
+        images: finalImages,
+        sizes,
+      };
+
       if (product) {
-        await api.put(`/admin/products/${product._id}`, formDataToSend, { timeout: 30000 });
+        await api.put(`/admin/products/${product._id}`, payload, { timeout: 15000 });
         toast({ title: 'Амжилттай', description: 'Бараа шинэчлэгдлээ' });
       } else {
-        await api.post('/admin/products', formDataToSend, { timeout: 30000 });
+        await api.post('/admin/products', payload, { timeout: 15000 });
         toast({ title: 'Амжилттай', description: 'Бараа нэмэгдлээ' });
       }
 
@@ -247,11 +251,12 @@ export default function ProductModal({
     } catch (error: any) {
       toast({
         title: 'Алдаа',
-        description: error.response?.data?.message || 'Алдаа гарлаа',
+        description: error.response?.data?.message || error.message || 'Алдаа гарлаа',
         variant: 'destructive',
       });
     } finally {
       setLoading(false);
+      setUploadProgress('');
     }
   };
 
@@ -359,6 +364,59 @@ export default function ProductModal({
           </div>
 
           <div>
+            <Label>Хэмжээ (заавал биш)</Label>
+            <div className="flex gap-2 mt-1">
+              <Input
+                value={sizeInput}
+                onChange={(e) => setSizeInput(e.target.value)}
+                placeholder="S, M, L, XL гэх мэт"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const val = sizeInput.trim();
+                    if (val && !sizes.includes(val)) {
+                      setSizes([...sizes, val]);
+                      setSizeInput('');
+                    }
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const val = sizeInput.trim();
+                  if (val && !sizes.includes(val)) {
+                    setSizes([...sizes, val]);
+                    setSizeInput('');
+                  }
+                }}
+              >
+                Нэмэх
+              </Button>
+            </div>
+            {sizes.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {sizes.map((size) => (
+                  <span
+                    key={size}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 rounded-md text-sm"
+                  >
+                    {size}
+                    <button
+                      type="button"
+                      onClick={() => setSizes(sizes.filter((s) => s !== size))}
+                      className="text-gray-400 hover:text-red-500"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
             <Label>Зураг {!product && '*'} (Хамгийн ихдээ 10 зураг)</Label>
             {product && (
               <p className="text-xs text-gray-500 mb-2">
@@ -393,7 +451,7 @@ export default function ProductModal({
                     <div key={index} className="relative group">
                       <div className="relative aspect-square rounded overflow-hidden border-2 border-gray-200">
                         <Image
-                          src={img.url.startsWith('blob:') ? img.url : getImageUrl(img.url)}
+                          src={img.file ? img.url : getImageUrl(img.url)}
                           alt={`Image ${index + 1}`}
                           fill
                           className="object-cover"
@@ -492,7 +550,7 @@ export default function ProductModal({
               Цуцлах
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Хадгалж байна...' : 'Хадгалах'}
+              {loading ? (uploadProgress || 'Хадгалж байна...') : 'Хадгалах'}
             </Button>
           </div>
         </form>

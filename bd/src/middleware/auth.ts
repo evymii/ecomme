@@ -37,8 +37,8 @@ export const authenticate = async (
 
     try {
       const decoded = jwt.verify(token, jwtSecret) as { userId: string };
-      const user = await User.findById(decoded.userId).select('-password');
-      
+      const user = await User.findById(decoded.userId).select('_id role name phoneNumber email').lean();
+
       if (!user) {
         res.status(401).json({ success: false, message: 'Хэрэглэгч олдсонгүй' });
         return;
@@ -49,19 +49,6 @@ export const authenticate = async (
       req.user = user;
       next();
     } catch (jwtError) {
-      // If JWT verification fails, try to find user by ID (backward compatibility)
-      try {
-        const user = await User.findById(token).select('-password');
-        if (user) {
-          req.userId = user._id.toString();
-          req.userRole = user.role;
-          req.user = user;
-          next();
-          return;
-        }
-      } catch (e) {
-        // Not a valid ObjectId
-      }
       res.status(401).json({ success: false, message: 'Хүчинтэй токен биш' });
     }
   } catch (error) {

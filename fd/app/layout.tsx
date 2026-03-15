@@ -9,8 +9,25 @@ import ClerkWrapper from "@/components/providers/ClerkWrapper";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Az Souvenir",
-  description: "Az Souvenir - Чанартай бүтээгдэхүүн",
+  title: {
+    default: "Az Souvenir - Монгол бэлэг дурсгалын дэлгүүр",
+    template: "%s | Az Souvenir",
+  },
+  description: "Az Souvenir - Монгол гар урлалын бэлэг дурсгал, чанартай бүтээгдэхүүн. Бэлэг дурсгалын цуглуулга.",
+  keywords: ["Az Souvenir", "бэлэг дурсгал", "Монгол", "гар урлал", "souvenir", "Mongolia"],
+  metadataBase: new URL("https://www.az-souvenir.com"),
+  openGraph: {
+    title: "Az Souvenir - Монгол бэлэг дурсгалын дэлгүүр",
+    description: "Монгол гар урлалын бэлэг дурсгал, чанартай бүтээгдэхүүн.",
+    url: "https://www.az-souvenir.com",
+    siteName: "Az Souvenir",
+    locale: "mn_MN",
+    type: "website",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({

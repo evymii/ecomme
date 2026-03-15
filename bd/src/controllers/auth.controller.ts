@@ -37,13 +37,7 @@ const checkIfAuthenticated = async (req: Request): Promise<IUser | null> => {
       const user = await User.findById(decoded.userId).select('-password');
       return user;
     } catch (jwtError) {
-      // Try backward compatibility (user ID as token)
-      try {
-        const user = await User.findById(token).select('-password');
-        return user;
-      } catch (e) {
-        return null;
-      }
+      return null;
     }
   } catch (error) {
     return null;

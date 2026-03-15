@@ -5,7 +5,7 @@ import { AuthRequest } from '../middleware/auth.js';
 import User from '../models/User.model.js';
 import Product from '../models/Product.model.js';
 import Order from '../models/Order.model.js';
-import { bufferToDataURL, generateFileName, saveFileLocally } from '../utils/fileUtils.js';
+import { deleteFromCloudinary } from '../utils/fileUtils.js';
 
 // Simple admin check endpoint - fast and lightweight
 export const checkAdminAuth = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -27,21 +27,30 @@ export const checkAdminAuth = async (req: AuthRequest, res: Response): Promise<v
 
 export const getDashboardStats = async (req: Request, res: Response): Promise<void> => {
   try {
-    const totalUsers = await User.countDocuments();
-    const totalProducts = await Product.countDocuments();
-    const totalOrders = await Order.countDocuments();
-    
-    const orders = await Order.find();
-    const revenue = orders.reduce((sum, order) => sum + order.total, 0);
+    const [totalUsers, totalProducts, revenueResult] = await Promise.all([
+      User.countDocuments(),
+      Product.countDocuments(),
+      Order.aggregate([
+        {
+          $group: {
+            _id: null,
+            revenue: { $sum: '$total' },
+            count: { $sum: 1 },
+          },
+        },
+      ]).maxTimeMS(5000),
+    ]);
+
+    const stats = revenueResult[0] || { revenue: 0, count: 0 };
 
     res.json({
       success: true,
       stats: {
         totalUsers,
         totalProducts,
-        totalOrders,
-        revenue
-      }
+        totalOrders: stats.count,
+        revenue: stats.revenue,
+      },
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -174,35 +183,19 @@ export const getAllProducts = async (req: Request, res: Response): Promise<void>
 
 export const createProduct = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { code, name, description, price, category, stock, features, mainImageIndex, sizes } = req.body;
+    const { code, name, description, price, category, stock, features, images, sizes } = req.body;
 
     if (!code || !name || !description || !price || !category || stock === undefined) {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         message: 'Бүх талбарыг бөглөнө үү'
       });
       return;
     }
 
-    const files = req.files as Express.Multer.File[];
-    if (!files || files.length === 0) {
+    if (!images || !Array.isArray(images) || images.length === 0) {
       res.status(400).json({ success: false, message: 'Хамгийн багадаа 1 зураг оруулна уу' });
       return;
-    }
-
-    // Parse features if it's a string
-    let parsedFeatures: any = {
-      isNew: false,
-      isFeatured: false,
-      isDiscounted: false
-    };
-
-    if (features) {
-      try {
-        parsedFeatures = typeof features === 'string' ? JSON.parse(features) : features;
-      } catch (e) {
-        console.error('Error parsing features:', e);
-      }
     }
 
     const toBoolean = (value: any): boolean => {
@@ -211,40 +204,25 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
       return Boolean(value);
     };
 
-    const mainIdx = parseInt(mainImageIndex || '0', 10);
-    
-    // For Vercel/serverless, use base64 data URLs
-    // For local development, save files to disk
-    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
-    const productImages = await Promise.all(
-      files.map(async (file, index) => {
-        let imageUrl: string;
-        
-        if (isProduction) {
-          // Use base64 data URL for serverless
-          imageUrl = file.buffer ? bufferToDataURL(file.buffer, file.mimetype) : '';
-        } else {
-          // Save to local disk for development
-          const filename = generateFileName(file.originalname);
-          imageUrl = await saveFileLocally(file.buffer, filename, 'products');
-        }
-        
-        return {
-          url: imageUrl,
-          isMain: index === mainIdx,
-          order: index
-        };
-      })
-    );
+    // Parse features
+    let parsedFeatures = features || {};
+    if (typeof parsedFeatures === 'string') {
+      try { parsedFeatures = JSON.parse(parsedFeatures); } catch { parsedFeatures = {}; }
+    }
 
-    // Parse sizes if it's a string
+    // Images come as array of { url, isMain, order } from frontend
+    const productImages = images.map((img: any, idx: number) => ({
+      url: img.url,
+      isMain: !!img.isMain,
+      order: img.order ?? idx,
+    }));
+
+    // Parse sizes
     let parsedSizes: string[] = [];
     if (sizes) {
       try {
         parsedSizes = typeof sizes === 'string' ? JSON.parse(sizes) : sizes;
-      } catch (e) {
-        console.error('Error parsing sizes:', e);
-      }
+      } catch { /* ignore */ }
     }
 
     const product = new Product({
@@ -271,7 +249,6 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
       product
     });
   } catch (error: any) {
-    console.error('Create product error:', error);
     if (error.code === 11000) {
       res.status(400).json({ success: false, message: 'Энэ кодтой бараа аль хэдийн байна' });
       return;
@@ -283,7 +260,7 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
 export const updateProduct = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { code, name, description, price, category, stock, features, mainImageIndex, sizes, existingImages } = req.body;
+    const { code, name, description, price, category, stock, features, images, sizes } = req.body;
 
     const product = await Product.findById(id);
     if (!product) {
@@ -291,93 +268,19 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const files = req.files as Express.Multer.File[];
-    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+    const toBoolean = (value: any): boolean => {
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') return value === 'true';
+      return Boolean(value);
+    };
 
-    // Handle images: merge existing images with new ones, or use existing if no new files
-    if (files && files.length > 0) {
-      // New files uploaded - process them
-      const mainIdx = parseInt(mainImageIndex || '0', 10);
-      const newImages = await Promise.all(
-        files.map(async (file, index) => {
-          let imageUrl: string;
-          
-          if (isProduction) {
-            imageUrl = file.buffer ? bufferToDataURL(file.buffer, file.mimetype) : '';
-          } else {
-            const filename = generateFileName(file.originalname);
-            imageUrl = await saveFileLocally(file.buffer, filename, 'products');
-          }
-          
-          return {
-            url: imageUrl,
-            isMain: false, // Will be set based on mainImageIndex later
-            order: index
-          };
-        })
-      );
-
-      // Parse existing images if provided
-      let parsedExistingImages: any[] = [];
-      if (existingImages) {
-        try {
-          parsedExistingImages = typeof existingImages === 'string' ? JSON.parse(existingImages) : existingImages;
-        } catch (e) {
-          console.error('Error parsing existing images:', e);
-        }
-      }
-
-      // Merge existing and new images, then set main image
-      // mainImageIndex refers to the final combined array
-      const allImages = [...parsedExistingImages, ...newImages];
-      const finalMainIdx = parseInt(mainImageIndex || '0', 10);
-      // Ensure main index is within bounds
-      const safeMainIdx = Math.max(0, Math.min(finalMainIdx, allImages.length - 1));
-      product.images = allImages.map((img, idx) => ({
-        url: (typeof img === 'string' ? img : (img.url || '')),
-        isMain: idx === safeMainIdx,
-        order: idx
+    // Images come as JSON array of { url, isMain, order }
+    if (images && Array.isArray(images) && images.length > 0) {
+      product.images = images.map((img: any, idx: number) => ({
+        url: img.url,
+        isMain: !!img.isMain,
+        order: img.order ?? idx,
       }));
-    } else if (existingImages) {
-      // No new files, but existing images data provided - update existing images order/main
-      try {
-        const parsedExistingImages = typeof existingImages === 'string' ? JSON.parse(existingImages) : existingImages;
-        if (Array.isArray(parsedExistingImages) && parsedExistingImages.length > 0) {
-          const finalMainIdx = parseInt(mainImageIndex || '0', 10);
-          // Ensure main index is within bounds
-          const safeMainIdx = Math.max(0, Math.min(finalMainIdx, parsedExistingImages.length - 1));
-          product.images = parsedExistingImages.map((img: any, idx: number) => ({
-            url: (typeof img === 'string' ? img : img.url) || '',
-            isMain: idx === safeMainIdx,
-            order: idx
-          }));
-        }
-      } catch (e) {
-        console.error('Error parsing existing images:', e);
-        // Keep existing images if parsing fails, but update main image if needed
-        if (mainImageIndex !== undefined && product.images && product.images.length > 0) {
-          const finalMainIdx = parseInt(mainImageIndex || '0', 10);
-          const safeMainIdx = Math.max(0, Math.min(finalMainIdx, product.images.length - 1));
-          product.images = product.images.map((img: any, idx: number) => ({
-            ...img,
-            isMain: idx === safeMainIdx,
-            order: idx
-          }));
-        }
-      }
-    }
-    // If neither files nor existingImages provided, keep current images (but update main image if needed)
-    else if (mainImageIndex !== undefined) {
-      // Only update main image index if provided
-      const finalMainIdx = parseInt(mainImageIndex || '0', 10);
-      if (product.images && product.images.length > 0) {
-        const safeMainIdx = Math.max(0, Math.min(finalMainIdx, product.images.length - 1));
-        product.images = product.images.map((img: any, idx: number) => ({
-          ...img,
-          isMain: idx === safeMainIdx,
-          order: idx
-        }));
-      }
     }
 
     if (code) product.code = code.toString().trim();
@@ -386,32 +289,24 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
     if (price) product.price = parseFloat(price.toString());
     if (category) product.category = category.toString().trim();
     if (stock !== undefined) product.stock = parseInt(stock.toString(), 10);
-    
+
     if (sizes !== undefined) {
       try {
         const parsedSizes = typeof sizes === 'string' ? JSON.parse(sizes) : sizes;
         product.sizes = Array.isArray(parsedSizes) ? parsedSizes : [];
-      } catch (e) {
-        console.error('Error parsing sizes:', e);
-      }
+      } catch { /* ignore */ }
     }
 
     if (features) {
-      try {
-        const parsedFeatures = typeof features === 'string' ? JSON.parse(features) : features;
-        const toBoolean = (value: any): boolean => {
-          if (typeof value === 'boolean') return value;
-          if (typeof value === 'string') return value === 'true';
-          return Boolean(value);
-        };
-        product.features = {
-          isNew: toBoolean(parsedFeatures.isNew),
-          isFeatured: toBoolean(parsedFeatures.isFeatured),
-          isDiscounted: toBoolean(parsedFeatures.isDiscounted)
-        };
-      } catch (e) {
-        console.error('Error parsing features:', e);
+      let parsedFeatures = features;
+      if (typeof parsedFeatures === 'string') {
+        try { parsedFeatures = JSON.parse(parsedFeatures); } catch { parsedFeatures = {}; }
       }
+      product.features = {
+        isNew: toBoolean(parsedFeatures.isNew),
+        isFeatured: toBoolean(parsedFeatures.isFeatured),
+        isDiscounted: toBoolean(parsedFeatures.isDiscounted)
+      };
     }
 
     await product.save();
@@ -422,7 +317,6 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
       product
     });
   } catch (error: any) {
-    console.error('Update product error:', error);
     if (error.code === 11000) {
       res.status(400).json({ success: false, message: 'Энэ кодтой бараа аль хэдийн байна' });
       return;
@@ -439,6 +333,13 @@ export const deleteProduct = async (req: Request, res: Response): Promise<void> 
     if (!product) {
       res.status(404).json({ success: false, message: 'Бараа олдсонгүй' });
       return;
+    }
+
+    // Delete images from Cloudinary in background
+    if (product.images && product.images.length > 0) {
+      Promise.all(
+        product.images.map((img: any) => deleteFromCloudinary(img.url))
+      ).catch(err => console.error('Cloudinary cleanup error:', err));
     }
 
     res.json({ success: true, message: 'Бараа амжилттай устгалаа' });
@@ -569,10 +470,6 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
 
     const query = andConditions.length > 0 ? { $and: andConditions } : {};
 
-    console.log('📋 Fetching orders for admin with query:', query);
-    if (startDate && createdAtFilter.$gte) console.log('📅 Start date:', createdAtFilter.$gte);
-    if (endDate && createdAtFilter.$lte) console.log('📅 End date:', createdAtFilter.$lte);
-
     // Read raw refs first; manual enrichment avoids populate cast crashes on legacy/corrupt docs.
     const orders = await Order.find(query)
       .select('orderCode items total status createdAt phoneNumber email customerName user deliveryAddress paymentMethod address payment')
@@ -624,8 +521,6 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
         paymentMethod: normalizedPaymentMethod,
       };
     });
-
-    console.log(`✅ Found ${normalizedOrders.length} orders for admin`);
 
     // Set cache headers
     res.setHeader('Cache-Control', 'private, max-age=10');
@@ -950,14 +845,16 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const order = await Order.findById(id);
+    const order = await Order.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true, runValidators: true }
+    ).lean();
+
     if (!order) {
       res.status(404).json({ success: false, message: 'Захиалга олдсонгүй' });
       return;
     }
-
-    order.status = status;
-    await order.save();
 
     res.json({
       success: true,

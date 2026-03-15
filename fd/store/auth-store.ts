@@ -47,7 +47,8 @@ export const useAuthStore = create<AuthStore>()(
           if (token) {
             localStorage.setItem('token', token);
             // Cookie backup — survives Safari ITP localStorage clearing
-            document.cookie = `auth_token=${token}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax; Secure`;
+            const isSecure = window.location.protocol === 'https:';
+            document.cookie = `auth_token=${token}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax${isSecure ? '; Secure' : ''}`;
             try {
               const currentState = get();
               if (currentState.user) {

@@ -152,7 +152,6 @@ export default function OrdersPage() {
                                       alt={item.product?.name || 'Product'}
                                       fill
                                       className="object-cover"
-                                      unoptimized
                                       sizes="64px"
                                     />
                                   ) : (

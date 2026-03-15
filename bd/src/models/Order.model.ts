@@ -97,5 +97,6 @@ OrderSchema.index({ createdAt: -1 }); // For sorting by date
 OrderSchema.index({ user: 1, createdAt: -1 }); // For user's orders
 OrderSchema.index({ status: 1, createdAt: -1 }); // For filtering by status
 OrderSchema.index({ orderCode: 1 }); // For finding by order code
+OrderSchema.index({ phoneNumber: 1 }); // For admin search by phone
 
 export default mongoose.model<IOrder>('Order', OrderSchema);
