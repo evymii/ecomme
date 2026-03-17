@@ -144,7 +144,7 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
         import('jspdf'),
       ]);
 
-      const canvas = await html2canvas(receiptRef.current, {
+      const canvas = await (html2canvas as any)(receiptRef.current, {
         scale: 2,
         useCORS: true,
         logging: false,
