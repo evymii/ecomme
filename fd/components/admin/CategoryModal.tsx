@@ -11,15 +11,21 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import api from '@/lib/api';
 
 interface Category {
   _id: string;
   name: string;
+  fullName?: string;
+  shortName?: string;
   nameEn?: string;
   description?: string;
   isActive: boolean;
+  parentId?: string | null;
+  parentName?: string | null;
+  level?: number;
 }
 
 interface CategoryModalProps {
@@ -40,17 +46,34 @@ export default function CategoryModal({
     nameEn: '',
     description: '',
     isActive: true,
+    parentId: 'none',
   });
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
+    if (!open) return;
+    const fetchCategories = async () => {
+      try {
+        const response = await api.get('/admin/categories');
+        setAllCategories(response.data?.categories || []);
+      } catch (_error) {
+        setAllCategories([]);
+      }
+    };
+    fetchCategories();
+  }, [open]);
+
+  useEffect(() => {
     if (category) {
+      const shortName = category.shortName || category.name.split('/').pop() || category.name;
       setFormData({
-        name: category.name,
+        name: shortName,
         nameEn: category.nameEn || '',
         description: category.description || '',
         isActive: category.isActive,
+        parentId: category.parentId || 'none',
       });
     } else {
       setFormData({
@@ -58,9 +81,17 @@ export default function CategoryModal({
         nameEn: '',
         description: '',
         isActive: true,
+        parentId: 'none',
       });
     }
   }, [category, open]);
+
+  const parentOptions = allCategories.filter((item) => {
+    const isMain = !item.parentId;
+    if (!isMain) return false;
+    if (category && item._id === category._id) return false;
+    return true;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,10 +107,16 @@ export default function CategoryModal({
     setLoading(true);
     try {
       if (category) {
-        await api.put(`/admin/categories/${category._id}`, formData);
+        await api.put(`/admin/categories/${category._id}`, {
+          ...formData,
+          parentId: formData.parentId === 'none' ? null : formData.parentId,
+        });
         toast({ title: 'Амжилттай', description: 'Ангилал шинэчлэгдлээ' });
       } else {
-        await api.post('/admin/categories', formData);
+        await api.post('/admin/categories', {
+          ...formData,
+          parentId: formData.parentId === 'none' ? null : formData.parentId,
+        });
         toast({ title: 'Амжилттай', description: 'Ангилал нэмэгдлээ' });
       }
 
@@ -110,13 +147,35 @@ export default function CategoryModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="name">Ангиллын нэр *</Label>
+            <Label htmlFor="parent">Эцэг ангилал</Label>
+            <Select
+              value={formData.parentId}
+              onValueChange={(value) => setFormData({ ...formData, parentId: value })}
+            >
+              <SelectTrigger id="parent">
+                <SelectValue placeholder="Үндсэн ангилал" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Үндсэн ангилал</SelectItem>
+                {parentOptions.map((parent) => (
+                  <SelectItem key={parent._id} value={parent._id}>
+                    {parent.shortName || parent.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="name">
+              {formData.parentId === 'none' ? 'Ангиллын нэр *' : 'Дэд ангиллын нэр *'}
+            </Label>
             <Input
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
-              placeholder="Жишээ: Бичиг хэрэг"
+              placeholder={formData.parentId === 'none' ? 'Жишээ: Бичиг хэрэг' : 'Жишээ: Цэнэглэгч'}
             />
           </div>
 

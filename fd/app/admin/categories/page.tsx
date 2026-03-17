@@ -17,9 +17,14 @@ import { getCache, setCache, clearCache } from '@/lib/admin-cache';
 interface Category {
   _id: string;
   name: string;
+  fullName?: string;
+  shortName?: string;
   nameEn?: string;
   description?: string;
   isActive: boolean;
+  parentId?: string | null;
+  parentName?: string | null;
+  level?: number;
 }
 
 export default function AdminCategoriesPage() {
@@ -160,7 +165,14 @@ export default function AdminCategoriesPage() {
                       className="border rounded-lg p-2.5 md:p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-0 hover:bg-gray-50 overflow-x-hidden"
                     >
                       <div className="flex-1">
-                        <h3 className="text-sm md:text-lg font-semibold leading-tight">{category.name}</h3>
+                        <h3 className="text-sm md:text-lg font-semibold leading-tight">
+                          {category.shortName || category.name}
+                        </h3>
+                        {category.parentName && (
+                          <p className="text-[10px] md:text-xs text-gray-500 mt-0.5">
+                            Parent: {category.parentName}
+                          </p>
+                        )}
                         {category.nameEn && (
                           <p className="text-[11px] md:text-sm text-gray-500 leading-tight">{category.nameEn}</p>
                         )}

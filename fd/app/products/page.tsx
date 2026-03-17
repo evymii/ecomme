@@ -31,12 +31,13 @@ interface Category {
   name: string;
 }
 
-const PAGE_LIMIT = 16;
+const PAGE_LIMIT = 15;
 
 function ProductsContent() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedBigCategory, setSelectedBigCategory] = useState<string | null>(null);
+  const [selectedMiniCategory, setSelectedMiniCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
@@ -47,13 +48,55 @@ function ProductsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const categoryHierarchy = useCallback((allCategories: Category[]) => {
+    const map = new Map<string, { minis: Array<{ label: string; fullName: string }> }>();
+    for (const category of allCategories) {
+      const rawName = (category.name || '').trim();
+      if (!rawName) continue;
+      const [bigRaw, ...rest] = rawName.split('/');
+      const big = bigRaw.trim();
+      if (!big) continue;
+      const miniLabel = rest.join('/').trim();
+      const entry = map.get(big) || { minis: [] };
+      if (miniLabel) {
+        entry.minis.push({ label: miniLabel, fullName: rawName });
+      }
+      map.set(big, entry);
+    }
+
+    return Array.from(map.entries())
+      .map(([big, data]) => ({
+        big,
+        minis: data.minis
+          .filter((mini, idx, arr) => arr.findIndex((m) => m.fullName === mini.fullName) === idx)
+          .sort((a, b) => a.label.localeCompare(b.label, 'mn')),
+      }))
+      .sort((a, b) => a.big.localeCompare(b.big, 'mn'));
+  }, []);
+
   // Get category from URL
   useEffect(() => {
+    const urlBig = searchParams.get('big');
+    const urlMini = searchParams.get('mini');
     const categoryId = searchParams.get('category_id');
-    if (categoryId) {
-      setSelectedCategoryId(categoryId);
+
+    if (urlBig) {
+      setSelectedBigCategory(urlBig);
+      setSelectedMiniCategory(urlMini || null);
+      return;
     }
-  }, [searchParams]);
+
+    if (categoryId && categories.length > 0) {
+      const categoryDoc = categories.find((category) => category._id === categoryId);
+      if (categoryDoc?.name) {
+        const [bigRaw, ...rest] = categoryDoc.name.split('/');
+        const big = bigRaw.trim();
+        const mini = rest.join('/').trim();
+        setSelectedBigCategory(big || null);
+        setSelectedMiniCategory(mini ? categoryDoc.name : null);
+      }
+    }
+  }, [searchParams, categories]);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -68,6 +111,12 @@ function ProductsContent() {
     fetchCategories();
   }, []);
 
+  const hierarchy = categoryHierarchy(categories);
+  const selectedHierarchy = selectedBigCategory
+    ? hierarchy.find((entry) => entry.big === selectedBigCategory) || null
+    : null;
+  const selectedCategoryQuery = selectedMiniCategory || selectedBigCategory;
+
   // Reset and fetch first page when category changes
   useEffect(() => {
     const fetchProducts = async () => {
@@ -75,8 +124,10 @@ function ProductsContent() {
         setLoading(true);
         setPage(1);
         let response;
-        if (selectedCategoryId) {
-          response = await api.get(`/products/category/${selectedCategoryId}?page=1&limit=${PAGE_LIMIT}`);
+        if (selectedCategoryQuery) {
+          response = await api.get(
+            `/products/category/${encodeURIComponent(selectedCategoryQuery)}?page=1&limit=${PAGE_LIMIT}`
+          );
         } else {
           response = await api.get(`/products?page=1&limit=${PAGE_LIMIT}`);
         }
@@ -94,7 +145,7 @@ function ProductsContent() {
     };
 
     fetchProducts();
-  }, [selectedCategoryId]);
+  }, [selectedCategoryQuery]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -102,8 +153,10 @@ function ProductsContent() {
       setLoadingMore(true);
       const nextPage = page + 1;
       let response;
-      if (selectedCategoryId) {
-        response = await api.get(`/products/category/${selectedCategoryId}?page=${nextPage}&limit=${PAGE_LIMIT}`);
+      if (selectedCategoryQuery) {
+        response = await api.get(
+          `/products/category/${encodeURIComponent(selectedCategoryQuery)}?page=${nextPage}&limit=${PAGE_LIMIT}`
+        );
       } else {
         response = await api.get(`/products?page=${nextPage}&limit=${PAGE_LIMIT}`);
       }
@@ -119,7 +172,7 @@ function ProductsContent() {
     } finally {
       setLoadingMore(false);
     }
-  }, [page, hasMore, loadingMore, selectedCategoryId]);
+  }, [page, hasMore, loadingMore, selectedCategoryQuery]);
 
   // Infinite scroll
   useEffect(() => {
@@ -137,21 +190,32 @@ function ProductsContent() {
     );
     observer.observe(target);
     return () => observer.disconnect();
-  }, [hasMore, page, loadingMore, selectedCategoryId]);
+  }, [hasMore, loadMore]);
 
-  const handleCategoryClick = (categoryId: string | null) => {
-    setSelectedCategoryId(categoryId);
-    if (categoryId) {
-      router.push(`/products?category_id=${categoryId}`);
+  const handleBigCategoryClick = (bigCategory: string | null) => {
+    setSelectedBigCategory(bigCategory);
+    setSelectedMiniCategory(null);
+    if (bigCategory) {
+      router.push(`/products?big=${encodeURIComponent(bigCategory)}`);
     } else {
       router.push('/products');
     }
   };
 
+  const handleMiniCategoryClick = (miniCategory: string | null) => {
+    setSelectedMiniCategory(miniCategory);
+    if (!selectedBigCategory) return;
+    if (miniCategory) {
+      router.push(
+        `/products?big=${encodeURIComponent(selectedBigCategory)}&mini=${encodeURIComponent(miniCategory)}`
+      );
+    } else {
+      router.push(`/products?big=${encodeURIComponent(selectedBigCategory)}`);
+    }
+  };
+
   // Get current category name for display
-  const selectedCategoryName = selectedCategoryId
-    ? categories.find(c => c._id === selectedCategoryId)?.name || 'Бүтээгдэхүүн'
-    : 'Бүх бүтээгдэхүүн';
+  const selectedCategoryName = selectedMiniCategory || selectedBigCategory || 'Бүх бүтээгдэхүүн';
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
@@ -168,34 +232,64 @@ function ProductsContent() {
         </p>
       </div>
 
-      {/* Category Filters - Horizontal Pills */}
+      {/* Main Categories - Horizontal Pills */}
       <div className="flex gap-2.5 overflow-x-auto pb-4 mb-6 md:mb-8 scrollbar-hide">
         <button
-          onClick={() => handleCategoryClick(null)}
+          onClick={() => handleBigCategoryClick(null)}
           className={cn(
             'px-4 py-2 rounded-2xl min-h-11 max-w-[9.5rem] md:max-w-none text-center leading-tight whitespace-normal break-words flex-shrink-0 transition-all duration-300 text-sm font-light tracking-wide',
-            selectedCategoryId === null
+            selectedBigCategory === null
               ? 'bg-[#02111B] text-white shadow-lg scale-105'
               : 'bg-white text-[#5D737E] border border-[#02111B]/10 hover:border-[#5D737E]/30'
           )}
         >
           Бүгд
         </button>
-        {categories.map((category) => (
+        {hierarchy.map((entry) => (
           <button
-            key={category._id}
-            onClick={() => handleCategoryClick(category._id)}
+            key={entry.big}
+            onClick={() => handleBigCategoryClick(entry.big)}
             className={cn(
               'px-4 py-2 rounded-2xl min-h-11 max-w-[9.5rem] md:max-w-none text-center leading-tight whitespace-normal break-words flex-shrink-0 transition-all duration-300 text-sm font-light tracking-wide',
-              selectedCategoryId === category._id
+              selectedBigCategory === entry.big
                 ? 'bg-[#02111B] text-white shadow-lg scale-105'
                 : 'bg-white text-[#5D737E] border border-[#02111B]/10 hover:border-[#5D737E]/30'
             )}
           >
-            {category.name}
+            {entry.big}
           </button>
         ))}
       </div>
+
+      {selectedHierarchy && selectedHierarchy.minis.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-3 mb-6 -mt-4 md:-mt-5 scrollbar-hide">
+          <button
+            onClick={() => handleMiniCategoryClick(null)}
+            className={cn(
+              'px-3 py-1.5 rounded-xl whitespace-nowrap text-xs md:text-sm border transition-colors',
+              selectedMiniCategory === null
+                ? 'bg-[#02111B] text-white border-[#02111B]'
+                : 'bg-white text-[#5D737E] border-[#02111B]/15 hover:border-[#5D737E]/30'
+            )}
+          >
+            Бүгд
+          </button>
+          {selectedHierarchy.minis.map((mini) => (
+            <button
+              key={mini.fullName}
+              onClick={() => handleMiniCategoryClick(mini.fullName)}
+              className={cn(
+                'px-3 py-1.5 rounded-xl text-left text-xs md:text-sm max-w-[11rem] md:max-w-none whitespace-normal break-words border transition-colors',
+                selectedMiniCategory === mini.fullName
+                  ? 'bg-[#02111B] text-white border-[#02111B]'
+                  : 'bg-white text-[#5D737E] border-[#02111B]/15 hover:border-[#5D737E]/30'
+              )}
+            >
+              {mini.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Products Grid */}
       {loading && showLoader ? (
