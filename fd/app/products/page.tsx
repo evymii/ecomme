@@ -173,7 +173,7 @@ function ProductsContent() {
         <button
           onClick={() => handleCategoryClick(null)}
           className={cn(
-            'px-5 py-2 rounded-full whitespace-nowrap transition-all duration-300 text-sm font-light tracking-wide',
+            'px-4 py-2 rounded-2xl min-h-11 max-w-[9.5rem] md:max-w-none text-center leading-tight whitespace-normal break-words flex-shrink-0 transition-all duration-300 text-sm font-light tracking-wide',
             selectedCategoryId === null
               ? 'bg-[#02111B] text-white shadow-lg scale-105'
               : 'bg-white text-[#5D737E] border border-[#02111B]/10 hover:border-[#5D737E]/30'
@@ -186,7 +186,7 @@ function ProductsContent() {
             key={category._id}
             onClick={() => handleCategoryClick(category._id)}
             className={cn(
-              'px-5 py-2 rounded-full whitespace-nowrap transition-all duration-300 text-sm font-light tracking-wide',
+              'px-4 py-2 rounded-2xl min-h-11 max-w-[9.5rem] md:max-w-none text-center leading-tight whitespace-normal break-words flex-shrink-0 transition-all duration-300 text-sm font-light tracking-wide',
               selectedCategoryId === category._id
                 ? 'bg-[#02111B] text-white shadow-lg scale-105'
                 : 'bg-white text-[#5D737E] border border-[#02111B]/10 hover:border-[#5D737E]/30'

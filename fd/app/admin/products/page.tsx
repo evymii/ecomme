@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Header from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -46,6 +46,7 @@ export default function AdminProductsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const { isAdmin, isChecking } = useAdminAuth();
   const { toast } = useToast();
 
@@ -71,14 +72,39 @@ export default function AdminProductsPage() {
   }, [toast]);
 
   // Filter products based on search query
-  const filteredProducts = products.filter(product => {
-    if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      product.name.toLowerCase().includes(query) ||
-      product.code.toLowerCase().includes(query)
+  const filteredProducts = useMemo(
+    () =>
+      products.filter((product) => {
+        if (!searchQuery.trim()) return true;
+        const query = searchQuery.toLowerCase();
+        return (
+          product.name.toLowerCase().includes(query) ||
+          product.code.toLowerCase().includes(query)
+        );
+      }),
+    [products, searchQuery]
+  );
+
+  const categoryOptions = useMemo(() => {
+    const categories = Array.from(
+      new Set(
+        products
+          .map((product) => product.category?.trim())
+          .filter((category): category is string => Boolean(category))
+      )
     );
-  });
+    return categories.sort((a, b) => a.localeCompare(b, 'mn'));
+  }, [products]);
+
+  const categoryFilteredProducts = useMemo(() => {
+    const base = selectedCategory
+      ? filteredProducts.filter(
+          (product) => (product.category?.trim() || 'Бусад ангилал') === selectedCategory
+        )
+      : filteredProducts;
+
+    return [...base].sort((a, b) => a.name.localeCompare(b.name, 'mn'));
+  }, [filteredProducts, selectedCategory]);
 
   const CACHE_KEY = 'admin_products';
 
@@ -253,76 +279,117 @@ export default function AdminProductsPage() {
         {loading && showLoader ? (
           <PageLoader />
         ) : loading ? null : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-6 overflow-x-hidden">
-            {filteredProducts.map((product) => {
-              const mainImage = product.images.find(img => img.isMain) || product.images[0];
-              return (
-                <Card key={product._id} className="bg-white rounded-md md:rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col h-full">
-                  <div className="relative aspect-square flex-shrink-0 w-full">
-                    {mainImage ? (
-                      <Image
-                        src={getImageUrl(mainImage.url)}
-                        alt={product.name}
-                        fill
-                        className="object-cover"
-                        unoptimized
-                        sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-gray-400 text-[10px] md:text-xs">Зураг байхгүй</span>
+          <div className="space-y-4 overflow-x-hidden">
+            <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide">
+              <button
+                onClick={() => setSelectedCategory(null)}
+                className={`px-4 py-2 rounded-full whitespace-nowrap text-sm transition-all ${
+                  selectedCategory === null
+                    ? 'bg-[#02111B] text-white'
+                    : 'bg-white text-[#5D737E] border border-[#02111B]/10 hover:border-[#5D737E]/30'
+                }`}
+              >
+                Бүгд ({filteredProducts.length})
+              </button>
+              {categoryOptions.map((category) => {
+                const count = filteredProducts.filter(
+                  (product) => (product.category?.trim() || 'Бусад ангилал') === category
+                ).length;
+                return (
+                  <button
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
+                    className={`px-4 py-2 rounded-full whitespace-nowrap text-sm transition-all ${
+                      selectedCategory === category
+                        ? 'bg-[#02111B] text-white'
+                        : 'bg-white text-[#5D737E] border border-[#02111B]/10 hover:border-[#5D737E]/30'
+                    }`}
+                  >
+                    {category} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            {categoryFilteredProducts.length === 0 ? (
+              <Card className="bg-white">
+                <CardContent className="p-6 text-center text-sm text-gray-500">
+                  Илэрцтэй бараа олдсонгүй
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-6">
+                {categoryFilteredProducts.map((product) => {
+                  const mainImage = product.images.find((img) => img.isMain) || product.images[0];
+                  return (
+                    <Card key={product._id} className="bg-white rounded-md md:rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col h-full">
+                      <div className="relative aspect-square flex-shrink-0 w-full">
+                        {mainImage ? (
+                          <Image
+                            src={getImageUrl(mainImage.url)}
+                            alt={product.name}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                            sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+                            <span className="text-gray-400 text-[10px] md:text-xs">Зураг байхгүй</span>
+                          </div>
+                        )}
+                        <div className="absolute top-1 right-1 md:top-2 md:right-2 flex gap-0.5 md:gap-1 flex-wrap">
+                          {product.features.isNew && (
+                            <span className="bg-green-500 text-white text-[9px] md:text-xs px-1 md:px-1.5 py-0.5 rounded">
+                              Шинэ
+                            </span>
+                          )}
+                          {product.features.isFeatured && (
+                            <span className="bg-blue-500 text-white text-[9px] md:text-xs px-1 md:px-1.5 py-0.5 rounded">
+                              Онцлох
+                            </span>
+                          )}
+                          {product.features.isDiscounted && (
+                            <span className="bg-red-500 text-white text-[9px] md:text-xs px-1 md:px-1.5 py-0.5 rounded">
+                              Хямдарсан
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    )}
-                    <div className="absolute top-1 right-1 md:top-2 md:right-2 flex gap-0.5 md:gap-1 flex-wrap">
-                      {product.features.isNew && (
-                        <span className="bg-green-500 text-white text-[9px] md:text-xs px-1 md:px-1.5 py-0.5 rounded">
-                          Шинэ
-                        </span>
-                      )}
-                      {product.features.isFeatured && (
-                        <span className="bg-blue-500 text-white text-[9px] md:text-xs px-1 md:px-1.5 py-0.5 rounded">
-                          Онцлох
-                        </span>
-                      )}
-                      {product.features.isDiscounted && (
-                        <span className="bg-red-500 text-white text-[9px] md:text-xs px-1 md:px-1.5 py-0.5 rounded">
-                          Хямдарсан
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <CardContent className="p-2 md:p-4 flex flex-col flex-1">
-                    <div className="flex-1">
-                      <p className="text-[9px] md:text-xs text-gray-500 mb-0.5 md:mb-1">Код: {product.code}</p>
-                      <h3 className="font-medium text-[11px] md:text-base mb-0.5 md:mb-1 line-clamp-2 min-h-[1.8rem] md:min-h-[2.6rem] leading-tight">{product.name}</h3>
-                      <p className="text-[10px] md:text-sm text-gray-600 mb-0.5 md:mb-1 line-clamp-1">{product.category}</p>
-                      <p className="text-sm md:text-xl font-semibold mb-1 md:mb-3">₮{product.price.toLocaleString()}</p>
-                      <p className="text-[10px] md:text-sm text-gray-600 mb-1.5 md:mb-3">
-                        Нөөц: {product.stock} ширхэг
-                      </p>
-                    </div>
-                    <div className="flex gap-1 md:gap-2 mt-auto">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(product)}
-                        className="flex-1 text-[9px] md:text-sm h-7 md:h-9 whitespace-nowrap"
-                      >
-                        Засах
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDelete(product._id)}
-                        className="flex-1 text-[9px] md:text-sm h-7 md:h-9 whitespace-nowrap"
-                      >
-                        Устгах
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                      <CardContent className="p-2 md:p-4 flex flex-col flex-1">
+                        <div className="flex-1">
+                          <p className="text-[9px] md:text-xs text-gray-500 mb-0.5 md:mb-1">Код: {product.code}</p>
+                          <h3 className="font-medium text-[11px] md:text-base mb-0.5 md:mb-1 line-clamp-2 min-h-[1.8rem] md:min-h-[2.6rem] leading-tight">{product.name}</h3>
+                          <p className="text-[10px] md:text-sm text-gray-600 mb-0.5 md:mb-1 line-clamp-1">{product.category}</p>
+                          <p className="text-sm md:text-xl font-semibold mb-1 md:mb-3">₮{product.price.toLocaleString()}</p>
+                          <p className="text-[10px] md:text-sm text-gray-600 mb-1.5 md:mb-3">
+                            Нөөц: {product.stock} ширхэг
+                          </p>
+                        </div>
+                        <div className="flex gap-1 md:gap-2 mt-auto">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(product)}
+                            className="flex-1 text-[9px] md:text-sm h-7 md:h-9 whitespace-nowrap"
+                          >
+                            Засах
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDelete(product._id)}
+                            className="flex-1 text-[9px] md:text-sm h-7 md:h-9 whitespace-nowrap"
+                          >
+                            Устгах
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
