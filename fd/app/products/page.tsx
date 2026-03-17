@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -39,12 +39,8 @@ function ProductsContent() {
   const [selectedBigCategory, setSelectedBigCategory] = useState<string | null>(null);
   const [selectedMiniCategory, setSelectedMiniCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
   const showLoader = useDelayedLoading(loading, 250);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -117,80 +113,61 @@ function ProductsContent() {
     : null;
   const selectedCategoryQuery = selectedMiniCategory || selectedBigCategory;
 
-  // Reset and fetch first page when category changes
+  // Fetch all pages when category changes (no load-more button)
   useEffect(() => {
+    let cancelled = false;
+
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        setPage(1);
-        let response;
-        if (selectedCategoryQuery) {
-          response = await api.get(
-            `/products/category/${encodeURIComponent(selectedCategoryQuery)}?page=1&limit=${PAGE_LIMIT}`
-          );
-        } else {
-          response = await api.get(`/products?page=1&limit=${PAGE_LIMIT}`);
+
+        const allProducts: Product[] = [];
+        let currentPage = 1;
+        let shouldContinue = true;
+        let serverTotal = 0;
+
+        while (shouldContinue) {
+          const url = selectedCategoryQuery
+            ? `/products/category/${encodeURIComponent(selectedCategoryQuery)}?page=${currentPage}&limit=${PAGE_LIMIT}`
+            : `/products?page=${currentPage}&limit=${PAGE_LIMIT}`;
+
+          const response = await api.get(url);
+          const batch: Product[] = response.data.products || [];
+          const pagination = response.data.pagination;
+
+          allProducts.push(...batch);
+          serverTotal = pagination?.total || serverTotal;
+          shouldContinue = Boolean(pagination?.hasMore);
+          currentPage += 1;
+
+          // Safety break in case API returns broken pagination.
+          if (currentPage > 200) {
+            shouldContinue = false;
+          }
         }
-        setProducts(response.data.products || []);
-        const pagination = response.data.pagination;
-        if (pagination) {
-          setHasMore(pagination.hasMore);
-          setTotal(pagination.total);
+
+        if (!cancelled) {
+          setProducts(allProducts);
+          setTotal(serverTotal || allProducts.length);
         }
       } catch (error) {
         console.error('Error fetching products:', error);
+        if (!cancelled) {
+          setProducts([]);
+          setTotal(0);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchProducts();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCategoryQuery]);
-
-  const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
-    try {
-      setLoadingMore(true);
-      const nextPage = page + 1;
-      let response;
-      if (selectedCategoryQuery) {
-        response = await api.get(
-          `/products/category/${encodeURIComponent(selectedCategoryQuery)}?page=${nextPage}&limit=${PAGE_LIMIT}`
-        );
-      } else {
-        response = await api.get(`/products?page=${nextPage}&limit=${PAGE_LIMIT}`);
-      }
-      const newProducts = response.data.products || [];
-      setProducts(prev => [...prev, ...newProducts]);
-      setPage(nextPage);
-      const pagination = response.data.pagination;
-      if (pagination) {
-        setHasMore(pagination.hasMore);
-      }
-    } catch (error) {
-      console.error('Error loading more products:', error);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [page, hasMore, loadingMore, selectedCategoryQuery]);
-
-  // Infinite scroll
-  useEffect(() => {
-    if (!hasMore) return;
-    const target = loadMoreRef.current;
-    if (!target) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          loadMore();
-        }
-      },
-      { rootMargin: '300px 0px' }
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [hasMore, loadMore]);
 
   const handleBigCategoryClick = (bigCategory: string | null) => {
     setSelectedBigCategory(bigCategory);
@@ -299,21 +276,11 @@ function ProductsContent() {
           <p className="text-[#5D737E] font-light">Бараа олдсонгүй</p>
         </div>
       ) : (
-        <>
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
-            {products.map((product, index) => (
-              <ProductCard key={product._id} product={product} priority={index < 4} />
-            ))}
-          </div>
-
-          <div ref={loadMoreRef} className="h-10 mt-6 flex items-center justify-center">
-            {loadingMore ? (
-              <span className="text-sm text-[#5D737E] font-light">Ачаалж байна...</span>
-            ) : hasMore ? (
-              <span className="text-xs text-[#5D737E] font-light">Доош гүйлгэж үргэлжлүүлэн ачаална</span>
-            ) : null}
-          </div>
-        </>
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
+          {products.map((product, index) => (
+            <ProductCard key={product._id} product={product} priority={index < 4} />
+          ))}
+        </div>
       )}
     </div>
   );
