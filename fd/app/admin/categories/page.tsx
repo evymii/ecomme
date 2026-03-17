@@ -93,16 +93,17 @@ export default function AdminCategoriesPage() {
     setModalOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, name: string) => {
     if (!confirm('Энэ ангиллыг устгахдаа итгэлтэй байна уу?')) return;
     try {
       await api.delete(`/admin/categories/${id}`);
+      setCategories((prev) => prev.filter((category) => category._id !== id));
       toast({
         title: 'Амжилттай',
-        description: 'Ангилал устгагдлаа',
+        description: `"${name}" ангилал устгагдлаа`,
       });
       clearCache(CACHE_KEY);
-      fetchCategories(true);
+      void fetchCategories(true);
     } catch (error: any) {
       toast({
         title: 'Алдаа',
@@ -201,7 +202,7 @@ export default function AdminCategoriesPage() {
                         <Button
                           variant="destructive"
                           size="sm"
-                          onClick={() => handleDelete(category._id)}
+                          onClick={() => handleDelete(category._id, category.shortName || category.name)}
                           className="h-8 md:h-9"
                         >
                           <Trash2 className="w-3 h-3 md:w-4 md:h-4" />

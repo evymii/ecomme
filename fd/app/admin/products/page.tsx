@@ -202,12 +202,17 @@ export default function AdminProductsPage() {
     openEditModal();
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, name: string) => {
     if (!confirm('Энэ барааг устгахдаа итгэлтэй байна уу?')) return;
     try {
       await api.delete(`/admin/products/${id}`);
+      setProducts((prev) => prev.filter((product) => product._id !== id));
+      toast({
+        title: 'Амжилттай',
+        description: `"${name}" бараа устгагдлаа`,
+      });
       clearCache(CACHE_KEY);
-      fetchProducts(true);
+      void fetchProducts(true);
     } catch (error: any) {
       console.error('Error deleting product:', error);
       if (await handleAdminAuthError(error)) {
@@ -378,7 +383,7 @@ export default function AdminProductsPage() {
                           <Button
                             variant="destructive"
                             size="sm"
-                            onClick={() => handleDelete(product._id)}
+                            onClick={() => handleDelete(product._id, product.name)}
                             className="flex-1 text-[9px] md:text-sm h-7 md:h-9 whitespace-nowrap"
                           >
                             Устгах
