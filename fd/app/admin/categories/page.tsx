@@ -153,19 +153,19 @@ export default function AdminCategoriesPage() {
                   Ангилал олдсонгүй
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-4">
                   {categories.map((category) => (
                     <div
                       key={category._id}
-                      className="border rounded-lg p-3 md:p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0 hover:bg-gray-50"
+                      className="border rounded-lg p-2.5 md:p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-0 hover:bg-gray-50 overflow-x-hidden"
                     >
                       <div className="flex-1">
-                        <h3 className="text-sm md:text-lg font-semibold">{category.name}</h3>
+                        <h3 className="text-sm md:text-lg font-semibold leading-tight">{category.name}</h3>
                         {category.nameEn && (
-                          <p className="text-xs md:text-sm text-gray-500">{category.nameEn}</p>
+                          <p className="text-[11px] md:text-sm text-gray-500 leading-tight">{category.nameEn}</p>
                         )}
                         {category.description && (
-                          <p className="text-xs md:text-sm text-gray-600 mt-1">{category.description}</p>
+                          <p className="text-[11px] md:text-sm text-gray-600 mt-1 line-clamp-2">{category.description}</p>
                         )}
                         <span
                           className={`inline-block mt-2 px-2 py-1 rounded text-[10px] md:text-xs ${
@@ -177,7 +177,7 @@ export default function AdminCategoriesPage() {
                           {category.isActive ? 'Идэвхтэй' : 'Идэвхгүй'}
                         </span>
                       </div>
-                      <div className="flex gap-2 md:ml-4">
+                      <div className="flex gap-2 md:ml-4 justify-end">
                         <Button
                           variant="outline"
                           size="sm"

@@ -253,7 +253,7 @@ export default function AdminProductsPage() {
         {loading && showLoader ? (
           <PageLoader />
         ) : loading ? null : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-6 overflow-x-hidden">
             {filteredProducts.map((product) => {
               const mainImage = product.images.find(img => img.isMain) || product.images[0];
               return (
@@ -294,8 +294,8 @@ export default function AdminProductsPage() {
                   <CardContent className="p-2 md:p-4 flex flex-col flex-1">
                     <div className="flex-1">
                       <p className="text-[9px] md:text-xs text-gray-500 mb-0.5 md:mb-1">Код: {product.code}</p>
-                      <h3 className="font-medium text-[11px] md:text-base mb-1 md:mb-2 line-clamp-2 min-h-[2rem] md:min-h-[3rem] leading-tight md:leading-normal">{product.name}</h3>
-                      <p className="text-[10px] md:text-sm text-gray-600 mb-0.5 md:mb-2 line-clamp-1">{product.category}</p>
+                      <h3 className="font-medium text-[11px] md:text-base mb-0.5 md:mb-1 line-clamp-2 min-h-[1.8rem] md:min-h-[2.6rem] leading-tight">{product.name}</h3>
+                      <p className="text-[10px] md:text-sm text-gray-600 mb-0.5 md:mb-1 line-clamp-1">{product.category}</p>
                       <p className="text-sm md:text-xl font-semibold mb-1 md:mb-3">₮{product.price.toLocaleString()}</p>
                       <p className="text-[10px] md:text-sm text-gray-600 mb-1.5 md:mb-3">
                         Нөөц: {product.stock} ширхэг

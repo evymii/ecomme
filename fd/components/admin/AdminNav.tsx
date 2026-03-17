@@ -36,7 +36,7 @@ export default function AdminNav() {
 
   return (
     <>
-      {/* Mobile Sidebar - Right Side */}
+      {/* Mobile Sidebar - Left Side */}
       {mobileMenuOpen && (
         <>
           {/* Backdrop */}
@@ -48,8 +48,8 @@ export default function AdminNav() {
           {/* Sidebar */}
           <aside
             className={cn(
-              'fixed top-0 right-0 h-full w-64 bg-white z-50 shadow-2xl md:hidden transition-transform duration-300 ease-in-out',
-              mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
+              'fixed top-0 left-0 h-full w-64 max-w-[90vw] bg-white z-50 shadow-2xl md:hidden transition-transform duration-300 ease-in-out',
+              mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
             )}
           >
             <div className="flex flex-col h-full">

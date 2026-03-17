@@ -511,21 +511,29 @@ export default function Header() {
       </header>
 
       {/* Admin Mobile Sidebar */}
-      {showAdminUi && mobileMenuOpen && (
+      {showAdminUi && (
         <>
           <div
-            className="fixed inset-0 bg-[#02111B]/40 z-40 lg:hidden backdrop-blur-sm"
+            className={cn(
+              "fixed inset-0 bg-[#02111B]/40 z-40 lg:hidden backdrop-blur-sm transition-opacity duration-300",
+              mobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
+            )}
             onClick={() => setMobileMenuOpen(false)}
           />
-          <aside className="fixed top-0 right-0 h-full w-72 bg-[#FCFCFC] z-50 shadow-2xl lg:hidden transition-transform duration-300 ease-in-out">
-            <div className="flex flex-col h-full">
+          <aside
+            className={cn(
+              "fixed top-0 left-0 h-full w-72 max-w-[90vw] bg-[#FCFCFC] z-50 shadow-2xl lg:hidden transition-transform duration-300 ease-in-out",
+              mobileMenuOpen ? "translate-x-0" : "-translate-x-full",
+            )}
+          >
+            <div className="flex flex-col h-full overflow-x-hidden">
               <div className="flex items-center justify-between p-4 border-b border-[#02111B]/5">
                 <h2 className="text-sm font-medium text-[#02111B] tracking-tight">
                   Цэс
                 </h2>
                 <button
                   onClick={() => setMobileMenuOpen(false)}
-                  className="p-1.5 hover:bg-[#5D737E]/10 rounded-full transition-colors"
+                  className="p-2 hover:bg-[#5D737E]/10 rounded-full transition-colors"
                   aria-label="Close menu"
                 >
                   <X className="w-4 h-4 text-[#3F4045]" />
@@ -539,7 +547,7 @@ export default function Header() {
                       href={item.href}
                       onClick={() => setMobileMenuOpen(false)}
                       className={cn(
-                        "block px-4 py-2.5 text-sm rounded-xl transition-colors font-light tracking-wide",
+                        "block px-4 py-3 text-sm rounded-xl transition-colors font-light tracking-wide",
                         pathname === item.href
                           ? "bg-[#02111B] text-white font-normal"
                           : "text-[#3F4045] hover:bg-[#5D737E]/10",
@@ -554,7 +562,7 @@ export default function Header() {
                 <Link
                   href="/"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="block px-4 py-2.5 text-sm text-[#5D737E] hover:bg-[#5D737E]/10 rounded-xl font-light"
+                  className="block px-4 py-3 text-sm text-[#5D737E] hover:bg-[#5D737E]/10 rounded-xl font-light"
                 >
                   Нүүр хуудас руу буцах
                 </Link>

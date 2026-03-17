@@ -57,10 +57,21 @@
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', -apple-system, system-ui, sans-serif;
+  }
+  img {
+    max-width: 100%;
+    height: auto;
   }
 }
 
@@ -74,5 +85,28 @@
 @media (min-width: 641px) {
   html {
     font-size: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  button,
+  [role='button'],
+  a[role='button'] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  main,
+  section,
+  article,
+  .container {
+    max-width: 100%;
+    overflow-x: hidden;
   }
 }
