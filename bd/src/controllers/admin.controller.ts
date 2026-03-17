@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import { AuthRequest } from '../middleware/auth.js';
 import User from '../models/User.model.js';

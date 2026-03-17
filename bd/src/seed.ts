@@ -3,7 +3,7 @@ import { connectDB, disconnectDB } from './config/database.js';
 import User from './models/User.model.js';
 import Category from './models/Category.model.js';
 import Product from './models/Product.model.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 dotenv.config();
 
