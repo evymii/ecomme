@@ -130,7 +130,19 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
       categoryName = decodedCategory;
     }
     
-    const cacheKey = `products:category:${categoryName}:${page}:${limit}`;
+    const normalizedCategory = categoryName.trim();
+    const isSubcategoryQuery = normalizedCategory.includes('/');
+    const categoryQuery = isSubcategoryQuery
+      ? {
+          // Subcategory selected: exact category only.
+          category: { $regex: new RegExp(`^${escapeRegex(normalizedCategory)}$`, 'i') },
+        }
+      : {
+          // Main category selected: include main + all nested subcategories.
+          category: { $regex: new RegExp(`^${escapeRegex(normalizedCategory)}(?:\\/.*)?$`, 'i') },
+        };
+
+    const cacheKey = `products:category:${normalizedCategory}:${page}:${limit}`;
     const cachedPayload = getCached<any>(cacheKey);
     if (cachedPayload) {
       res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=60');
@@ -141,7 +153,7 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
 
     // Optimize: paginated + lean + projected fields
     const [products, total] = await Promise.all([
-      Product.find({ category: categoryName })
+      Product.find(categoryQuery)
         .select('name price images features stock category createdAt code')
         .slice('images', 1)
         .sort({ createdAt: -1 })
@@ -149,7 +161,7 @@ export const getProductsByCategory = async (req: Request, res: Response): Promis
         .limit(limit)
         .lean()
         .maxTimeMS(5000),
-      Product.countDocuments({ category: categoryName }),
+      Product.countDocuments(categoryQuery),
     ]);
     const totalPages = Math.max(1, Math.ceil(total / limit));
     const payload = {

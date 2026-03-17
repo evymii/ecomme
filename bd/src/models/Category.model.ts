@@ -5,6 +5,7 @@ export interface ICategory extends Document {
   nameEn?: string; // Optional English name
   description?: string;
   isActive: boolean;
+  parent?: mongoose.Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,6 +28,11 @@ const CategorySchema = new Schema<ICategory>(
     isActive: {
       type: Boolean,
       default: true
+    },
+    parent: {
+      type: Schema.Types.ObjectId,
+      ref: 'Category',
+      default: null
     }
   },
   {
@@ -37,5 +43,6 @@ const CategorySchema = new Schema<ICategory>(
 // Index for faster queries
 // Note: name already has unique: true in field definition, so no need to index it again
 CategorySchema.index({ isActive: 1 });
+CategorySchema.index({ parent: 1, isActive: 1 });
 
 export default mongoose.model<ICategory>('Category', CategorySchema);
