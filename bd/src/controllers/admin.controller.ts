@@ -7,6 +7,34 @@ import Product from '../models/Product.model.js';
 import Order from '../models/Order.model.js';
 import { deleteFromCloudinary } from '../utils/fileUtils.js';
 
+type ProductImageInput = {
+  url: string;
+  isMain?: boolean;
+  order?: number;
+};
+
+function normalizeProductImages(images: ProductImageInput[]) {
+  return images.map((img, idx) => {
+    const url = typeof img?.url === 'string' ? img.url.trim() : '';
+    if (!url) {
+      throw new Error('Зургийн URL дутуу байна');
+    }
+    // Prevent huge payloads and slow responses from base64 image blobs in Mongo.
+    if (url.startsWith('data:image/')) {
+      throw new Error('Base64 зураг дэмжихгүй. Cloudinary URL ашиглана уу');
+    }
+    if (url.length > 5000) {
+      throw new Error('Зургийн URL хэт урт байна');
+    }
+
+    return {
+      url,
+      isMain: !!img?.isMain,
+      order: img?.order ?? idx,
+    };
+  });
+}
+
 // Simple admin check endpoint - fast and lightweight
 export const checkAdminAuth = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -211,11 +239,7 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
     }
 
     // Images come as array of { url, isMain, order } from frontend
-    const productImages = images.map((img: any, idx: number) => ({
-      url: img.url,
-      isMain: !!img.isMain,
-      order: img.order ?? idx,
-    }));
+    const productImages = normalizeProductImages(images as ProductImageInput[]);
 
     // Parse sizes
     let parsedSizes: string[] = [];
@@ -276,11 +300,7 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
 
     // Images come as JSON array of { url, isMain, order }
     if (images && Array.isArray(images) && images.length > 0) {
-      product.images = images.map((img: any, idx: number) => ({
-        url: img.url,
-        isMain: !!img.isMain,
-        order: img.order ?? idx,
-      }));
+      product.images = normalizeProductImages(images as ProductImageInput[]);
     }
 
     if (code) product.code = code.toString().trim();
