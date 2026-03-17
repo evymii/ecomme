@@ -497,7 +497,31 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
       .limit(500) // Limit orders to prevent huge responses
       .lean();
 
-    // Normalize legacy documents so admin UI always receives these fields.
+    const allProductIds = Array.from(
+      new Set(
+        (orders as any[])
+          .flatMap((order: any) =>
+            Array.isArray(order.items)
+              ? order.items
+                  .map((item: any) => item?.product)
+                  .filter((pid: any) => pid && mongoose.isValidObjectId(pid))
+                  .map((pid: any) => String(pid))
+              : []
+          )
+      )
+    );
+
+    const products = allProductIds.length
+      ? await Product.find({ _id: { $in: allProductIds } })
+          .select('name price code images')
+          .lean()
+      : [];
+
+    const productMap = new Map<string, any>(
+      (products as any[]).map((product: any) => [String(product._id), product])
+    );
+
+    // Normalize legacy documents and enrich products for admin UI.
     const normalizedOrders = (orders as any[]).map((order: any) => {
       const normalizedOrderCode =
         typeof order.orderCode === 'string' && order.orderCode.length > 5
@@ -522,12 +546,15 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
 
       const normalizedItems = Array.isArray(order.items)
         ? order.items.map((item: any) => {
+            const productId =
+              item?.product && mongoose.isValidObjectId(item.product)
+                ? String(item.product)
+                : null;
+            const productDoc = productId ? productMap.get(productId) : null;
             return {
               ...item,
               product:
-                item?.product && typeof item.product === 'object'
-                  ? item.product
-                  : null,
+                productDoc || (item?.product && typeof item.product === 'object' ? item.product : null),
             };
           })
         : [];
