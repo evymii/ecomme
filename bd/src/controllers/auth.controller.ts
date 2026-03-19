@@ -10,8 +10,8 @@ const generateToken = (userId: string): string => {
   if (!jwtSecret) {
     throw new Error('JWT_SECRET is not set in environment variables');
   }
-  // 1 month = 30 days
-  return jwt.sign({ userId }, jwtSecret, { expiresIn: '30d' });
+  // 3 years token expiration
+  return jwt.sign({ userId }, jwtSecret, { expiresIn: '3y' });
 };
 
 // Helper function to check if user is authenticated (optional check)
