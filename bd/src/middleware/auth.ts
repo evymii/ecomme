@@ -102,7 +102,7 @@ export const authenticate = async (
     }
 
     try {
-      const decoded = jwt.verify(token, jwtSecret) as { userId: string };
+      const decoded = jwt.verify(token, jwtSecret) as { userId: string; role?: string };
       // #region agent log
       debugLog({
         runId,

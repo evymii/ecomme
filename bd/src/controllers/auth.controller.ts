@@ -5,13 +5,12 @@ import crypto from 'crypto';
 import User, { IUser } from '../models/User.model.js';
 import { AuthRequest } from '../middleware/auth.js';
 
-const generateToken = (userId: string): string => {
+const generateToken = (userId: string, role: string): string => {
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
     throw new Error('JWT_SECRET is not set in environment variables');
   }
-  // 3 years token expiration
-  return jwt.sign({ userId }, jwtSecret, { expiresIn: '3y' });
+  return jwt.sign({ userId, role }, jwtSecret, { expiresIn: '30d' });
 };
 
 // Helper function to check if user is authenticated (optional check)
@@ -33,7 +32,7 @@ const checkIfAuthenticated = async (req: Request): Promise<IUser | null> => {
     }
 
     try {
-      const decoded = jwt.verify(token, jwtSecret) as { userId: string };
+      const decoded = jwt.verify(token, jwtSecret) as { userId: string; role?: string };
       const user = await User.findById(decoded.userId).select('-password');
       return user;
     } catch (jwtError) {
@@ -70,12 +69,13 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       console.log('Auth check failed (user not authenticated), proceeding with signup');
     }
 
-    const { phoneNumber, email, name, password, emailVerified } = req.body;
+    const { email, name, password, emailVerified } = req.body;
+    const rawPhone = req.body.phone ?? req.body.phoneNumber;
 
     // Validate all fields are provided and not empty
-    if (!phoneNumber || !email || !name || !password) {
+    if (!rawPhone || !email || !name || !password) {
       const missingFields = [];
-      if (!phoneNumber) missingFields.push('утасны дугаар');
+      if (!rawPhone) missingFields.push('утасны дугаар');
       if (!email) missingFields.push('имэйл');
       if (!name) missingFields.push('нэр');
       if (!password) missingFields.push('нууц үг');
@@ -89,7 +89,7 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Check for empty strings after trim
-    if (!phoneNumber.trim() || !email.trim() || !name.trim() || !password.trim()) {
+    if (!String(rawPhone).trim() || !email.trim() || !name.trim() || !password.trim()) {
       res.status(400).json({ 
         success: false, 
         message: 'Бүх талбарыг бөглөнө үү' 
@@ -98,7 +98,7 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Normalize phone number and email (same as when saving)
-    const cleanPhoneNumber = phoneNumber.trim().replace(/\s|-/g, '');
+    const cleanPhoneNumber = String(rawPhone).trim().replace(/\s|-/g, '');
     const normalizedEmail = email.trim().toLowerCase();
     const trimmedName = name.trim();
 
@@ -132,12 +132,22 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Check if phone number already exists (prevent duplicate accounts)
-    const existingUser = await User.findOne({ phoneNumber: cleanPhoneNumber }).select('_id').lean();
-    if (existingUser) {
+    // Duplicate email (Clerk OTP already proved inbox access)
+    const existingEmail = await User.findOne({ email: normalizedEmail }).select('_id').lean();
+    if (existingEmail) {
       res.status(409).json({
         success: false,
-        message: 'Энэ утасны дугаараар бүртгэл аль хэдийн үүссэн байна. Нэвтрэх хэсгээр орно уу.'
+        message: 'Энэ имэйл бүртгэлтэй байна',
+      });
+      return;
+    }
+
+    // Duplicate phone
+    const existingPhone = await User.findOne({ phoneNumber: cleanPhoneNumber }).select('_id').lean();
+    if (existingPhone) {
+      res.status(409).json({
+        success: false,
+        message: 'Энэ утасны дугаар бүртгэлтэй байна',
       });
       return;
     }
@@ -145,11 +155,6 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Generate email verification token if not already verified by Clerk
-    const emailVerificationToken = emailVerified ? undefined : crypto.randomBytes(32).toString('hex');
-
-    // Create user in database
-    // First user with specific email becomes admin, or you can set manually
     const isFirstAdmin = normalizedEmail === 'n.munkhpurev@gmail.com' || normalizedEmail === 'admin@example.com';
     const user = new User({
       phoneNumber: cleanPhoneNumber,
@@ -157,8 +162,8 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       name: trimmedName,
       password: hashedPassword,
       role: isFirstAdmin ? 'admin' : 'user',
-      isEmailVerified: emailVerified === true, // true if Clerk verified the email
-      emailVerificationToken
+      isEmailVerified: emailVerified === true,
+      emailVerificationToken: emailVerified === true ? undefined : crypto.randomBytes(32).toString('hex'),
     });
 
     console.log('Creating user:', {
@@ -183,8 +188,7 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       throw saveError; // Re-throw other errors
     }
 
-    // Generate JWT token
-    const token = generateToken(user._id.toString());
+    const token = generateToken(user._id.toString(), user.role);
 
     res.status(201).json({
       success: true,
@@ -196,8 +200,8 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
         email: user.email,
         name: user.name,
         role: user.role,
-        address: user.address
-      }
+        address: user.address,
+      },
     });
   } catch (error: any) {
     console.error('Sign up error:', error);
@@ -237,66 +241,57 @@ export const checkEmail = async (req: Request, res: Response): Promise<void> => 
 
 export const signIn = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { phoneNumber, password } = req.body;
+    const rawPhone = req.body.phone ?? req.body.phoneNumber;
+    const { password } = req.body;
 
-    if (!phoneNumber || !password) {
+    if (!rawPhone || !password) {
       res.status(400).json({ success: false, message: 'Утасны дугаар болон нууц үг оруулна уу' });
       return;
     }
 
-    // Validate password format
     if (password.length !== 4 || !/^\d{4}$/.test(password)) {
       res.status(400).json({ success: false, message: 'Нууц үг 4 оронтой тоо байх ёстой' });
       return;
     }
 
-    // Clean phone number (remove spaces/dashes) - phone number is NOT verified, just used for login
-    const cleanPhoneNumber = phoneNumber.trim().replace(/\s|-/g, '');
+    const cleanPhoneNumber = String(rawPhone).trim().replace(/\s|-/g, '');
 
-    // Find all users with this phone number, sorted by newest first
-    // This handles duplicate accounts that may exist in the database
-    const users = await User.find({ phoneNumber: cleanPhoneNumber })
+    const user = await User.findOne({ phoneNumber: cleanPhoneNumber })
       .select('_id phoneNumber email name role address password')
-      .sort({ createdAt: -1 })
-      .limit(5)
       .maxTimeMS(5000)
       .lean();
 
-    if (!users || users.length === 0) {
+    if (!user) {
       res.status(401).json({ success: false, message: 'Утасны дугаар эсвэл нууц үг буруу байна' });
       return;
     }
 
-    // Try each user's password (handles duplicate accounts)
-    let matchedUser = null;
-    for (const u of users) {
-      if (u.password === 'clerk-managed') continue; // Skip clerk-managed (unhashed)
-      try {
-        const valid = await bcrypt.compare(password, u.password);
-        if (valid) { matchedUser = u; break; }
-      } catch { continue; }
-    }
-
-    if (!matchedUser) {
+    // Legacy rows may have non-bcrypt placeholders
+    if (user.password === 'clerk-managed' || !user.password) {
       res.status(401).json({ success: false, message: 'Утасны дугаар эсвэл нууц үг буруу байна' });
       return;
     }
 
-    // Generate JWT token
-    const token = generateToken(matchedUser._id.toString());
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      res.status(401).json({ success: false, message: 'Утасны дугаар эсвэл нууц үг буруу байна' });
+      return;
+    }
+
+    const token = generateToken(user._id.toString(), user.role);
 
     res.json({
       success: true,
       message: 'Нэвтрэх амжилттай',
       token,
       user: {
-        id: matchedUser._id.toString(),
-        phoneNumber: matchedUser.phoneNumber,
-        email: matchedUser.email,
-        name: matchedUser.name,
-        role: matchedUser.role,
-        address: matchedUser.address
-      }
+        id: user._id.toString(),
+        phoneNumber: user.phoneNumber,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        address: user.address,
+      },
     });
   } catch (error: any) {
     console.error('❌ Sign in error:', error);

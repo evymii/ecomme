@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useSignUp } from '@clerk/nextjs';
 import {
   Dialog,
@@ -15,7 +15,6 @@ import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/auth-store';
 import api from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import { CheckCircle2 } from 'lucide-react';
 
 /** Log Clerk API errors (includes `.errors[]` with `longMessage`). */
 function logClerkError(context: string, err: unknown) {
@@ -51,10 +50,6 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
   const [pendingVerification, setPendingVerification] = useState(false);
   const [otpCode, setOtpCode] = useState('');
 
-  // Success state
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
-  
   const { setUser, setToken, user } = useAuthStore();
   const { toast } = useToast();
   const mobileDialogClassName =
@@ -71,8 +66,8 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
     }
   };
   
-  // Clerk: email OTP for sign-up; setActive completes the Clerk session after OTP (required for reliable delivery / state).
-  const { isLoaded: signUpLoaded, signUp: clerkSignUp, setActive } = useSignUp();
+  // Clerk: email OTP only — no setActive, no Clerk session as source of truth.
+  const { isLoaded: signUpLoaded, signUp: clerkSignUp } = useSignUp();
 
   const resetForm = () => {
     setPhoneNumber('');
@@ -81,24 +76,7 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
     setPassword('');
     setOtpCode('');
     setPendingVerification(false);
-    setShowSuccess(false);
-    setSuccessMessage('');
   };
-
-  const onOpenChangeRef = useRef(onOpenChange);
-  onOpenChangeRef.current = onOpenChange;
-  const resetFormRef = useRef(resetForm);
-  resetFormRef.current = resetForm;
-
-  useEffect(() => {
-    if (!showSuccess) return;
-    const id = window.setTimeout(() => {
-      resetFormRef.current();
-      onOpenChangeRef.current(false);
-      requestAnimationFrame(() => returnFocusRef?.current?.focus());
-    }, 2000);
-    return () => clearTimeout(id);
-  }, [showSuccess, returnFocusRef]);
 
   const handleDialogOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
@@ -110,48 +88,35 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
     onOpenChange(isOpen);
   };
 
-  // ========== Helper: Create user in our backend ==========
+  const finishAuthAndClose = () => {
+    resetForm();
+    onOpenChange(false);
+    requestAnimationFrame(() => returnFocusRef?.current?.focus());
+  };
+
+  /** After Clerk OTP = complete — persist user + JWT from our API only. */
   const createBackendUser = async () => {
     const response = await api.post('/auth/signup', {
-      phoneNumber: phoneNumber.trim(),
-      email: email.trim(),
       name: name.trim(),
-      password: password,
+      email: email.trim(),
+      phone: phoneNumber.trim(),
+      password,
       emailVerified: true,
     });
 
-    if (response.data.success) {
-      setToken(response.data.token);
+    if (response.data.success && response.data.token) {
+      const token = response.data.token as string;
+      setToken(token);
+      localStorage.setItem('token', token);
       setUser({
         ...response.data.user,
         id: response.data.user.id || response.data.user._id,
       });
-
-      setSuccessMessage(`Сайн байна уу, ${name.trim()}! Бүртгэл амжилттай баталгаажлаа.`);
-      setShowSuccess(true);
-      return true;
-    } else {
-      throw new Error(response.data?.message || 'Backend бүртгэлд алдаа гарлаа');
+      toast({ title: 'Бүртгэл амжилттай!' });
+      finishAuthAndClose();
+      return;
     }
-  };
-
-  // ========== Helper: Handle existing Clerk account ==========
-  // Since Clerk passwords are random, we check our own backend instead
-  const handleExistingClerkAccount = async () => {
-    // Check if this email actually exists in our backend
-    const checkRes = await api.post('/auth/check-email', { email: email.trim() });
-    if (checkRes.data.exists) {
-      // Email really exists in our backend — user should sign in
-      toast({
-        title: 'Алдаа',
-        description: 'Энэ имэйл хаяг аль хэдийн бүртгэлтэй байна. Нэвтрэх хэсгээр орно уу.',
-        variant: 'destructive',
-      });
-    } else {
-      // Email does NOT exist in our backend — it's a stale Clerk record
-      // Bypass Clerk and create user directly in our backend
-      await createBackendUser();
-    }
+    throw new Error(response.data?.message || 'Backend бүртгэлд алдаа гарлаа');
   };
 
   // ========== SIGN UP (Step 1: Verify email via Clerk) ==========
@@ -163,7 +128,7 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
       return;
     }
 
-    if (!signUpLoaded || !clerkSignUp || !setActive) {
+    if (!signUpLoaded || !clerkSignUp) {
       toast({ title: 'Алдаа', description: 'Clerk ачаалагдаагүй байна. Хуудсыг дахин ачаалаарай.', variant: 'destructive' });
       return;
     }
@@ -240,18 +205,12 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
           clerkErr.errors?.[0]?.longMessage || clerkErr.errors?.[0]?.message || '';
 
         if (errorCode === 'form_identifier_exists' || errorMsg.includes('already') || errorMsg.includes('taken')) {
-          try {
-            await handleExistingClerkAccount();
-          } catch (fallbackErr: unknown) {
-            console.error('Existing account fallback error:', fallbackErr);
-            toast({
-              title: 'Алдаа',
-              description:
-                (fallbackErr as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-                'Бүртгэл шалгахад алдаа гарлаа. Дахин оролдоно уу.',
-              variant: 'destructive',
-            });
-          }
+          toast({
+            title: 'Алдаа',
+            description:
+              'Энэ имэйлээр OTP илгээх боломжгүй (Clerk-д бүртгэлтэй). Нэвтрэх хэсгээр орно уу эсвэл өөр имэйл ашиглана уу.',
+            variant: 'destructive',
+          });
         } else if (errorMsg.toLowerCase().includes('email')) {
           toast({ title: 'Алдаа', description: 'Имэйл хаяг буруу байна', variant: 'destructive' });
         } else {
@@ -282,7 +241,7 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
 
     setLoading(true);
     try {
-      if (!signUpLoaded || !clerkSignUp || !setActive) {
+      if (!signUpLoaded || !clerkSignUp) {
         toast({ title: 'Алдаа', description: 'Clerk ачаалагдаагүй байна', variant: 'destructive' });
         return;
       }
@@ -309,28 +268,17 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
         return;
       }
 
+      console.log('Clerk OTP result status:', result.status);
+
       if (result.status === 'complete') {
-        if (result.createdSessionId) {
-          try {
-            await setActive({ session: result.createdSessionId });
-          } catch (activeErr: unknown) {
-            const activeMsg = logClerkError('setActive after OTP', activeErr);
-            toast({
-              title: 'Анхааруулга',
-              description:
-                activeMsg ?? 'Clerk session идэвхжүүлэхэд алдаа гарлаа. Backend бүртгэлийг үргэлжлүүлнэ.',
-              variant: 'destructive',
-            });
-          }
-        }
         try {
           await createBackendUser();
         } catch (backendError: unknown) {
           const be = backendError as { response?: { data?: { message?: string } } };
           console.error('Backend signup error:', backendError);
           toast({
-            title: 'Анхааруулга',
-            description: be.response?.data?.message || 'Имэйл баталгаажсан. Серверт алдаа гарлаа, дахин нэвтрэнэ үү.',
+            title: 'Алдаа',
+            description: be.response?.data?.message || 'Бүртгэл хадгалахад алдаа гарлаа',
             variant: 'destructive',
           });
         }
@@ -383,7 +331,7 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
     setLoading(true);
     try {
       const signInPayload = {
-        phoneNumber: phoneNumber.trim(),
+        phone: phoneNumber.trim(),
         password,
       };
 
@@ -408,16 +356,16 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
         }
       }
 
-      if (response.data && response.data.success) {
-        setToken(response.data.token);
+      if (response.data && response.data.success && response.data.token) {
+        const token = response.data.token as string;
+        setToken(token);
+        localStorage.setItem('token', token);
         setUser({
           ...response.data.user,
           id: response.data.user.id || response.data.user._id,
         });
-
-        // Show success screen
-        setSuccessMessage(`Сайн байна уу, ${response.data.user.name || 'Хэрэглэгч'}! Нэвтрэх амжилттай.`);
-        setShowSuccess(true);
+        toast({ title: 'Нэвтрэлт амжилттай!' });
+        finishAuthAndClose();
       } else {
         throw new Error(response.data?.message || 'Нэвтрэхэд алдаа гарлаа');
       }
@@ -434,23 +382,6 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
       setLoading(false);
     }
   };
-
-  // ========== RENDER: Success Screen ==========
-  if (showSuccess) {
-    return (
-      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className={mobileDialogClassName}>
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle2 className="w-10 h-10 text-green-600" />
-            </div>
-            <h2 className="text-xl font-semibold mb-2">Амжилттай!</h2>
-            <p className="text-sm text-gray-600">{successMessage}</p>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
 
   // ========== RENDER: OTP Verification Step ==========
   if (pendingVerification) {
@@ -565,7 +496,7 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
               maxLength={4}
               pattern="[0-9]{4}"
               inputMode="numeric"
-              placeholder="****"
+              placeholder="4 оронтой нууц үг"
               className="h-11 md:h-10 text-base md:text-sm"
             />
           </div>
