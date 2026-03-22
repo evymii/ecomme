@@ -12,11 +12,47 @@ import adminRoutes from '../src/routes/admin.routes.js';
 import categoryRoutes from '../src/routes/category.routes.js';
 import publicRoutes from '../src/routes/public.routes.js';
 import { errorHandler } from '../src/middleware/errorHandler.js';
-import { corsOptions, isAllowedOrigin } from '../src/config/cors.js';
 
 dotenv.config();
 
 const app = express();
+
+// CORS configuration for Vercel
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'https://www.az-souvenir.com',
+  'https://az-souvenir.com',
+  'http://localhost:3000',
+  'http://localhost:3001',
+].filter((origin): origin is string => Boolean(origin));
+
+const normalizeOrigin = (value: string) => value.replace(/\/+$/, '').toLowerCase();
+const normalizedAllowedOrigins = allowedOrigins.map((origin) => normalizeOrigin(origin));
+const isTrustedOrigin = (origin: string): boolean => {
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (normalizedAllowedOrigins.includes(normalizedOrigin)) return true;
+  // Keep custom domain resilient to www/non-www variations.
+  return /^https:\/\/([a-z0-9-]+\.)*az-souvenir\.com$/i.test(normalizedOrigin);
+};
+
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    if (isTrustedOrigin(origin) || process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+    } else {
+      // Do not throw an error here; it turns CORS rejection into 500.
+      callback(null, false);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+};
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
@@ -29,7 +65,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.get('/uploads/:folder/:filename', (req, res, next) => {
   // Set CORS headers
   const origin = req.headers.origin;
-  if (!origin || isAllowedOrigin(origin)) {
+  if (!origin || isTrustedOrigin(origin) || process.env.NODE_ENV !== 'production') {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -120,7 +156,7 @@ export default async function handler(req: express.Request, res: express.Respons
         console.error('Failed to send timeout response:', e);
       }
     }
-  }, 28000);
+  }, 9800);
 
   // Helper to clear timeout and ensure response
   const cleanup = () => {
@@ -133,7 +169,7 @@ export default async function handler(req: express.Request, res: express.Respons
       await Promise.race([
         connectToDatabase(),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Database connection timeout after 12 seconds')), 12000)
+          setTimeout(() => reject(new Error('Database connection timeout after 7 seconds')), 7000)
         )
       ]);
     } catch (dbError: any) {
@@ -206,7 +242,7 @@ export default async function handler(req: express.Request, res: express.Respons
         if (!resolved && !res.headersSent) {
           errorHandler(new Error('Response timeout'));
         }
-      }, 27500);
+      }, 9600);
     });
   } catch (error: any) {
     cleanup();

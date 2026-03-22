@@ -12,14 +12,51 @@ import adminRoutes from './routes/admin.routes.js';
 import categoryRoutes from './routes/category.routes.js';
 import publicRoutes from './routes/public.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
-import { corsOptions, isAllowedOrigin } from './config/cors.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 
+const allowedOrigins = [
+  process.env.FRONTEND_URL, // e.g., https://www.az-souvenir.com
+  'https://www.az-souvenir.com',
+  'https://az-souvenir.com',
+  'http://localhost:3000',
+  'http://localhost:3001',
+].filter((origin): origin is string => Boolean(origin));
+
+const normalizeOrigin = (value: string) => value.replace(/\/+$/, '').toLowerCase();
+const normalizedAllowedOrigins = allowedOrigins.map((origin) => normalizeOrigin(origin));
+const isTrustedOrigin = (origin: string): boolean => {
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (normalizedAllowedOrigins.includes(normalizedOrigin)) return true;
+  return /^https:\/\/([a-z0-9-]+\.)*az-souvenir\.com$/i.test(normalizedOrigin);
+};
+
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Allow requests with no origin (curl, mobile apps)
+    if (!origin) return callback(null, true);
+
+    if (isTrustedOrigin(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Content-Length'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+};
+
+// Apply globally
 app.use(cors(corsOptions));
+
+// Ensure OPTIONS requests are handled
 app.options('*', cors(corsOptions));
 
 app.use(compression() as any);
@@ -32,8 +69,13 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   app.use('/uploads', (req, res, next) => {
     // Set CORS headers
     const origin = req.headers.origin;
-
-    if (!origin || isAllowedOrigin(origin)) {
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      'http://localhost:3000',
+      'http://localhost:3001'
+    ].filter(Boolean);
+    
+    if (!origin || isTrustedOrigin(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin || '*');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
