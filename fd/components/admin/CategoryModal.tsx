@@ -284,7 +284,7 @@ export default function CategoryModal({
                 />
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border border-[#efefef] px-[10px] py-1">
+              <div className="flex items-center justify-between rounded-full border border-[#efefef] px-3 py-2">
                 <span className="text-[12px] text-[#333]">Идэвхтэй</span>
                 <button
                   type="button"
@@ -294,14 +294,14 @@ export default function CategoryModal({
                     setFormData({ ...formData, isActive: !formData.isActive })
                   }
                   className={cn(
-                    'relative h-5 w-9 shrink-0 rounded-[10px] transition-colors',
+                    'relative h-6 w-11 shrink-0 rounded-full transition-colors',
                     formData.isActive ? 'bg-[#111]' : 'bg-[#e0e0e0]'
                   )}
                 >
                   <span
                     className={cn(
-                      'absolute top-[3px] h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform duration-200',
-                      formData.isActive ? 'translate-x-[20px]' : 'translate-x-0.5'
+                      'absolute left-0.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform duration-200',
+                      formData.isActive ? 'translate-x-[22px]' : 'translate-x-0'
                     )}
                   />
                 </button>

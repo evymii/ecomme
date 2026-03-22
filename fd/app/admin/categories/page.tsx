@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Header from '@/components/layout/Header';
 import CategoryModal from '@/components/admin/CategoryModal';
 import api from '@/lib/api';
@@ -21,9 +21,23 @@ interface Category {
   description?: string;
   isActive: boolean;
   parentId?: string | null;
+  /** Populated from API when present — used if parentId missing in cached payloads */
+  parent?: { _id?: string; name?: string } | null;
   parentName?: string | null;
   level?: number;
   sortOrder?: number;
+}
+
+/** Resolves parent id whether API sent parentId, populated parent.{_id}, or raw ref */
+function getParentId(c: Category): string | null {
+  if (c.parentId != null && String(c.parentId) !== '') {
+    return String(c.parentId);
+  }
+  const p = c.parent;
+  if (p && typeof p === 'object' && p._id != null) {
+    return String(p._id);
+  }
+  return null;
 }
 
 function IconGrid({ className }: { className?: string }) {
@@ -132,10 +146,11 @@ export default function AdminCategoriesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const didAutoExpand = useRef(false);
   const { isAdmin, isChecking } = useAdminAuth();
   const { toast } = useToast();
 
-  const CACHE_KEY = 'admin_categories';
+  const CACHE_KEY = 'admin_categories_v2';
 
   const fetchCategories = useCallback(
     async (skipCache = false) => {
@@ -191,16 +206,30 @@ export default function AdminCategoriesPage() {
   }, [isAdmin, isChecking, fetchCategories]);
 
   const rootCategories = useMemo(() => {
-    return categories.filter((c) => !c.parentId).sort(sortCategories);
+    return categories.filter((c) => !getParentId(c)).sort(sortCategories);
   }, [categories]);
 
   const childrenOf = useCallback(
     (parentId: string) =>
       categories
-        .filter((c) => c.parentId && String(c.parentId) === String(parentId))
+        .filter((c) => getParentId(c) === String(parentId))
         .sort(sortCategories),
     [categories]
   );
+
+  /** First load: expand every parent that has children so tree + nesting are visible */
+  useEffect(() => {
+    if (loading || categories.length === 0 || didAutoExpand.current) return;
+    didAutoExpand.current = true;
+    const next = new Set<string>();
+    for (const p of categories) {
+      if (getParentId(p)) continue;
+      if (categories.some((c) => getParentId(c) === String(p._id))) {
+        next.add(p._id);
+      }
+    }
+    setExpandedIds(next);
+  }, [loading, categories]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -314,15 +343,15 @@ export default function AdminCategoriesPage() {
                       hasChildren && 'cursor-pointer'
                     )}
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#111]">
-                      <IconGrid className="h-4 w-4" />
+                    <div className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-[8px] bg-[#111]">
+                      <IconGrid className="h-[18px] w-[18px]" />
                     </div>
                     <div className="min-w-0 flex-1 overflow-hidden">
                       <p className="truncate whitespace-nowrap text-[13px] font-medium leading-tight text-[#111]">
                         {displayName}
                       </p>
                       {parent.nameEn ? (
-                        <p className="truncate whitespace-nowrap text-[10px] leading-tight text-[#bbb]">
+                        <p className="truncate whitespace-nowrap text-[10px] leading-tight text-[#888]">
                           {parent.nameEn}
                         </p>
                       ) : null}
@@ -360,8 +389,8 @@ export default function AdminCategoriesPage() {
                       <IconChevron
                         className={cn(
                           'h-3 w-3 shrink-0 text-[#bbb] transition-transform duration-200',
-                          /* polyline points up; collapsed → right, expanded → down */
-                          expanded ? 'rotate-180' : '-rotate-90'
+                          /* polyline points right; rotate 90° CW → points down when expanded */
+                          expanded ? 'rotate-90' : 'rotate-0'
                         )}
                       />
                     ) : (
@@ -370,22 +399,26 @@ export default function AdminCategoriesPage() {
                   </div>
 
                   {hasChildren && expanded ? (
-                    <div className="relative mt-1 pl-[14px] before:absolute before:bottom-0 before:left-[6px] before:top-0 before:w-px before:bg-[#e8e8e8]">
+                    <div className="relative mt-1 pl-[14px]">
+                      <div
+                        className="absolute bottom-0 left-[6px] top-0 w-px bg-[#e8e8e8]"
+                        aria-hidden
+                      />
                       <div className="flex flex-col gap-1">
                         {children.map((child) => {
                           const childName = child.shortName || child.name;
                           return (
                             <div
                               key={child._id}
-                              className="relative rounded-[8px] border border-[#ebebeb] bg-white px-[10px] py-2"
+                              className="relative ml-0 rounded-[8px] border border-[#e0e0e0] bg-white px-[10px] py-2"
                             >
                               <div
                                 className="pointer-events-none absolute left-[-8px] top-1/2 h-px w-2 -translate-y-1/2 bg-[#e0e0e0]"
                                 aria-hidden
                               />
                               <div className="flex items-center gap-[9px]">
-                                <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md border border-[#e8e8e8] bg-[#f5f5f5] text-[#555]">
-                                  <IconSun className="h-3.5 w-3.5" />
+                                <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[6px] border border-[#d0d0d0] bg-white text-[#666]">
+                                  <IconSun className="h-[14px] w-[14px]" />
                                 </div>
                                 <div className="min-w-0 flex-1 overflow-hidden">
                                   <p className="truncate whitespace-nowrap text-[12px] font-medium leading-tight text-[#333]">

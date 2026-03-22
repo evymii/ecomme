@@ -48,6 +48,13 @@ export const getAllCategories = async (req: Request, res: Response): Promise<voi
       .lean()
       .maxTimeMS(4000);
 
+    const parentIdFromDoc = (category: any): string | null => {
+      const p = category.parent;
+      if (p == null) return null;
+      if (typeof p === 'object' && p._id != null) return String(p._id);
+      return String(p);
+    };
+
     const normalizedCategories = categories.map((category: any) => {
       const fullName = category.name;
       const segments = String(fullName || '')
@@ -55,13 +62,16 @@ export const getAllCategories = async (req: Request, res: Response): Promise<voi
         .map((segment: string) => segment.trim())
         .filter(Boolean);
       const shortName = segments.length > 0 ? segments[segments.length - 1] : fullName;
-      const parentName = category.parent?.name || null;
+      const parentName =
+        typeof category.parent === 'object' && category.parent?.name
+          ? category.parent.name
+          : null;
       const level = parentName || segments.length > 1 ? 2 : 1;
       return {
         ...category,
         fullName,
         shortName,
-        parentId: category.parent?._id || null,
+        parentId: parentIdFromDoc(category),
         parentName,
         level,
       };
