@@ -2,12 +2,35 @@
 
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Printer, Download, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 const REG_BOX_COUNT = 7;
+
+/** A4 @ 96dpi — full page and inner content (10mm margins ≈ 38px). */
+const A4_PX = {
+  pageW: 794,
+  pageH: 1123,
+  pad: 38,
+  innerW: 718,
+  rowH: 22,
+} as const;
+
+/** Fixed columns (px); name fills remainder of inner width. */
+const A4_COL_PX = {
+  no: 28,
+  code: 64,
+  unit: 32,
+  qty: 32,
+  price: 52,
+  total: 52,
+} as const;
+
+const A4_NAME_PX =
+  A4_PX.innerW - (A4_COL_PX.no + A4_COL_PX.code + A4_COL_PX.unit + A4_COL_PX.qty + A4_COL_PX.price + A4_COL_PX.total);
 
 export type PaperFormat = 'a4' | 'a5' | 'a6';
 
@@ -29,10 +52,8 @@ interface PaperPreset {
   sheetH: number;
   pageMarginMm: number;
   innerW: number;
-  minPageBodyH: number;
   rowsPerPage: number;
   jspdf: 'a4' | 'a5' | 'a6';
-  viewport: number;
   cols: ColWidths;
   rowHeightMm: number;
   printCellPaddingPx: number;
@@ -40,7 +61,6 @@ interface PaperPreset {
   titlePx: number;
   legalNoteMaxMm: number;
   stampMm: number;
-  barcodeWmm: number;
   regBoxWmm: number;
   regBoxHmm: number;
   footerFontPx: number;
@@ -57,18 +77,15 @@ const PAPER_PRESETS: Record<PaperFormat, PaperPreset> = {
     sheetH: 297,
     pageMarginMm: 10,
     innerW: 190,
-    minPageBodyH: 277,
     rowsPerPage: 20,
     jspdf: 'a4',
-    viewport: 210,
     cols: { no: 8, name: 72, code: 16, unit: 14, qty: 14, price: 22, total: 24 },
     rowHeightMm: 7.2,
-    printCellPaddingPx: 4,
-    printFontPx: 10,
+    printCellPaddingPx: 2,
+    printFontPx: 9,
     titlePx: 16,
     legalNoteMaxMm: 95,
     stampMm: 22,
-    barcodeWmm: 28,
     regBoxWmm: 6,
     regBoxHmm: 5,
     footerFontPx: 10,
@@ -83,18 +100,15 @@ const PAPER_PRESETS: Record<PaperFormat, PaperPreset> = {
     sheetH: 210,
     pageMarginMm: 8,
     innerW: 132,
-    minPageBodyH: 194,
     rowsPerPage: 14,
     jspdf: 'a5',
-    viewport: 148,
     cols: { no: 6, name: 56, code: 12, unit: 11, qty: 11, price: 17, total: 19 },
     rowHeightMm: 5.2,
-    printCellPaddingPx: 3,
+    printCellPaddingPx: 2,
     printFontPx: 8,
     titlePx: 13,
     legalNoteMaxMm: 62,
     stampMm: 18,
-    barcodeWmm: 22,
     regBoxWmm: 5,
     regBoxHmm: 4,
     footerFontPx: 8,
@@ -109,10 +123,8 @@ const PAPER_PRESETS: Record<PaperFormat, PaperPreset> = {
     sheetH: 148,
     pageMarginMm: 5,
     innerW: 95,
-    minPageBodyH: 138,
     rowsPerPage: 10,
     jspdf: 'a6',
-    viewport: 105,
     cols: { no: 5, name: 35, code: 9, unit: 8, qty: 8, price: 13, total: 13 },
     rowHeightMm: 3.6,
     printCellPaddingPx: 2,
@@ -120,7 +132,6 @@ const PAPER_PRESETS: Record<PaperFormat, PaperPreset> = {
     titlePx: 11,
     legalNoteMaxMm: 42,
     stampMm: 12,
-    barcodeWmm: 16,
     regBoxWmm: 3.5,
     regBoxHmm: 3.5,
     footerFontPx: 7,
@@ -148,10 +159,12 @@ interface Order {
   customerName?: string;
   items: OrderItem[];
   total: number;
-  deliveryAddress: {
-    address: string;
-    additionalInfo?: string;
-  } | string;
+  deliveryAddress:
+    | {
+        address: string;
+        additionalInfo?: string;
+      }
+    | string;
   paymentMethod?: string;
   payment?: {
     method?: string;
@@ -170,18 +183,22 @@ interface OrderReceiptProps {
   order: Order;
 }
 
-function chunkOrderItems(items: OrderItem[], rowsPerPage: number): OrderItem[][] {
+const MM_TO_PX = 96 / 25.4;
+
+function pagesForReceipt(items: OrderItem[], rowsPerPage: number): (OrderItem | null)[][] {
   const list = items || [];
   const pageCount = Math.max(1, Math.ceil(list.length / rowsPerPage) || 1);
-  const chunks: OrderItem[][] = [];
+  const pages: (OrderItem | null)[][] = [];
   for (let p = 0; p < pageCount; p++) {
-    const start = p * rowsPerPage;
-    chunks.push(list.slice(start, start + rowsPerPage));
+    const slice = list.slice(p * rowsPerPage, (p + 1) * rowsPerPage);
+    const padded: (OrderItem | null)[] = [...slice];
+    while (padded.length < rowsPerPage) {
+      padded.push(null);
+    }
+    pages.push(padded);
   }
-  return chunks;
+  return pages;
 }
-
-const MM_TO_PX = 96 / 25.4;
 
 function doubleRaf(): Promise<void> {
   return new Promise((resolve) => {
@@ -210,53 +227,10 @@ function applyCapturePixelBox(el: HTMLElement, sheetWmm: number, sheetHmm: numbe
   el.style.boxSizing = 'border-box';
 }
 
-async function withSinglePageVisible<T>(
-  pages: HTMLElement[],
-  pageIndex: number,
-  run: (el: HTMLElement) => Promise<T>
-): Promise<T> {
-  const prev = pages.map((p) => p.style.display);
-  pages.forEach((p, j) => {
-    p.style.display = j === pageIndex ? 'flex' : 'none';
-  });
-  await doubleRaf();
-  try {
-    return await run(pages[pageIndex]);
-  } finally {
-    pages.forEach((p, i) => {
-      p.style.display = prev[i];
-    });
-  }
-}
-
-function formatBarcodeDigits(orderCode: string | undefined): string {
-  const digits = (orderCode || '').replace(/\D/g, '');
-  const pad = digits.padStart(13, '0').slice(0, 13);
-  if (!pad.replace(/0/g, '')) return '8 656000 715042';
-  return `${pad[0]} ${pad.slice(1, 7)} ${pad.slice(7, 13)}`;
-}
-
-function ReceiptBarcodeVisual({ compact }: { compact?: boolean }) {
-  const bars = [
-    2, 1, 3, 1, 1, 2, 1, 2, 1, 1, 3, 2, 1, 2, 1, 3, 1, 2, 1, 2, 1, 1, 2, 3, 1, 2, 1, 2, 1, 1, 2, 1, 3, 1, 2, 1,
-  ];
-  let x = 2;
-  const rects = bars.map((w, i) => {
-    const cx = x;
-    x += w + 1;
-    return <rect key={i} x={cx} y={2} width={w} height={86} fill="#000" />;
-  });
-  const w = compact ? 48 : 72;
-  const h = compact ? 64 : 100;
-  return (
-    <svg width={w} height={h} viewBox="0 0 72 100" className="receipt-barcode-svg" aria-hidden style={{ display: 'block' }}>
-      {rects}
-    </svg>
-  );
-}
-
 function buildPrintEmbeddedStyles(p: PaperPreset): string {
   const c = p.cols;
+  const pageWmm = p.sheetW;
+  const pageHmm = p.sheetH;
   return `
   * { box-sizing: border-box; }
   html, body {
@@ -267,72 +241,53 @@ function buildPrintEmbeddedStyles(p: PaperPreset): string {
   }
   @page {
     size: ${p.pageSizeName} portrait;
-    margin: ${p.pageMarginMm}mm;
+    margin: 0mm;
   }
   @media print {
-    html, body {
-      width: ${p.innerW}mm;
-      margin: 0;
-      padding: 0;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-    .no-print {
-      display: none !important;
-    }
-    .receipt-print-root {
-      width: ${p.innerW}mm !important;
-      max-width: ${p.innerW}mm !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      box-sizing: border-box !important;
-    }
-    .receipt-paper-page {
+    body { margin: 0; padding: 0; }
+    .no-print { display: none !important; }
+    .receipt-page {
+      width: ${pageWmm}mm !important;
+      height: ${pageHmm}mm !important;
+      padding: ${p.pageMarginMm}mm !important;
+      page-break-after: always !important;
+      overflow: hidden !important;
+      box-shadow: none !important;
       display: flex !important;
       flex-direction: column !important;
-      width: ${p.innerW}mm !important;
-      min-height: ${p.minPageBodyH}mm !important;
       box-sizing: border-box !important;
-      page-break-after: always !important;
-      break-after: page !important;
     }
-    .receipt-paper-page:last-child {
-      page-break-after: auto !important;
-      break-after: auto !important;
+    .receipt-page:last-child {
+      page-break-after: avoid !important;
+    }
+    .receipt-print-root {
+      width: ${pageWmm}mm !important;
+      margin: 0 !important;
+      padding: 0 !important;
     }
     .receipt-sheet-top { flex-shrink: 0 !important; width: 100% !important; }
     .receipt-sheet-tablewrap {
       flex: 1 1 auto !important;
-      width: 100% !important;
       min-height: 0 !important;
+      overflow: hidden !important;
     }
     .receipt-sheet-footer {
       flex-shrink: 0 !important;
-      width: 100% !important;
       margin-top: auto !important;
     }
     .receipt-print-table {
-      width: ${p.innerW}mm !important;
-      max-width: ${p.innerW}mm !important;
+      width: 100% !important;
       table-layout: fixed !important;
       border-collapse: collapse !important;
     }
     .receipt-print-table th,
     .receipt-print-table td {
-      border: 1px solid #000 !important;
-      padding: ${p.printCellPaddingPx}px !important;
-      font-size: ${p.printFontPx}px !important;
-      word-break: break-word !important;
-      overflow-wrap: anywhere !important;
+      border: 0.5px solid #333 !important;
+      padding: 2px 3px !important;
+      vertical-align: middle !important;
+      overflow: hidden !important;
     }
-    .receipt-print-table thead th {
-      font-weight: bold !important;
-      text-align: center !important;
-      background-color: #fff !important;
-    }
-    .receipt-body-row td {
-      height: ${p.rowHeightMm}mm !important;
-    }
+    .receipt-body-row td { page-break-inside: avoid !important; }
     .receipt-col-no { width: ${c.no}mm !important; }
     .receipt-col-name { width: ${c.name}mm !important; }
     .receipt-col-code { width: ${c.code}mm !important; }
@@ -341,70 +296,31 @@ function buildPrintEmbeddedStyles(p: PaperPreset): string {
     .receipt-col-price { width: ${c.price}mm !important; }
     .receipt-col-total { width: ${c.total}mm !important; }
   }
-  @media screen {
-    .receipt-paper-page {
-      width: ${p.sheetW}mm;
-      max-width: min(${p.sheetW}mm, calc(100vw - 24px));
-      min-height: ${p.sheetH}mm;
-      box-sizing: border-box;
-      margin: 0 auto 16px;
-      padding: ${p.id === 'a6' ? '4mm' : '8mm'};
-      background: #fff;
-      border: 1px solid #e5e7eb;
-      display: flex;
-      flex-direction: column;
-    }
-    .receipt-sheet-footer { margin-top: auto; }
-  }
   body {
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     font-size: 11px;
     line-height: 1.3;
-  }
-  table {
-    border-collapse: collapse;
-    margin: 12px 0 8px;
-    font-size: 10px;
-  }
-  th, td {
-    border: 1px solid #000;
-    padding: 4px;
-    text-align: left;
-  }
-  th {
-    font-weight: bold;
-    text-align: center;
-    background-color: #fff;
   }
 `;
 }
 
 export default function OrderReceipt({ order }: OrderReceiptProps) {
   const { toast } = useToast();
-  const receiptRef = useRef<HTMLDivElement>(null);
-  const [receiptPage, setReceiptPage] = useState(1);
+  const receiptPrintRootRef = useRef<HTMLDivElement>(null);
   const [paperFormat, setPaperFormat] = useState<PaperFormat>('a4');
   const [isGenerating, setIsGenerating] = useState(false);
   const [pngLoading, setPngLoading] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const preset = PAPER_PRESETS[paperFormat];
   const items = order.items || [];
-  const chunks = useMemo(() => chunkOrderItems(items, preset.rowsPerPage), [items, preset.rowsPerPage]);
-  const totalPages = chunks.length;
-  const barcodeLabel = useMemo(() => formatBarcodeDigits(order.orderCode), [order.orderCode]);
-
-  useEffect(() => {
-    setReceiptPage(1);
-  }, [order._id]);
-
-  useEffect(() => {
-    setReceiptPage(1);
-  }, [paperFormat]);
-
-  useEffect(() => {
-    if (receiptPage > totalPages) setReceiptPage(totalPages);
-  }, [receiptPage, totalPages]);
+  const paddedPages = useMemo(() => pagesForReceipt(items, preset.rowsPerPage), [items, preset.rowsPerPage]);
+  const totalPages = paddedPages.length;
 
   const getOrderDeliveryAddress = () => {
     if (!order.deliveryAddress) return '-';
@@ -421,193 +337,6 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year} оны ${month} сарын ${day} өдөр`;
-  };
-
-  const handlePrint = async () => {
-    if (!receiptRef.current || typeof window === 'undefined' || printLoading) return;
-    setPrintLoading(true);
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
-    try {
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        const styles = buildPrintEmbeddedStyles(preset);
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="utf-8" />
-              <meta name="viewport" content="width=${preset.viewport}, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-              <title>Захиалгын баримт - ${order.orderCode || order._id}</title>
-              <style>${styles}</style>
-            </head>
-            <body>
-              ${receiptRef.current.innerHTML}
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.focus();
-        await doubleRaf();
-        printWindow.print();
-      }
-    } catch (e) {
-      console.error('OrderReceipt print: ' + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setPrintLoading(false);
-    }
-  };
-
-  const handleDownloadPDF = async () => {
-    if (typeof window === 'undefined' || isGenerating) return;
-
-    const el = document.getElementById('receipt-preview');
-    if (!el) {
-      toast({ title: 'PDF үүсгэхэд алдаа гарлаа', variant: 'destructive' });
-      return;
-    }
-
-    const pageEls = Array.from(el.querySelectorAll<HTMLElement>('.receipt-paper-page'));
-    const prevPageDisplays = pageEls.map((p) => p.style.display);
-    const prevWidth = el.style.width;
-    const prevMinHeight = el.style.minHeight;
-
-    setIsGenerating(true);
-    try {
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
-      pageEls.forEach((p) => {
-        p.style.display = 'flex';
-      });
-      el.style.width = '794px';
-      el.style.minHeight = '1123px';
-
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
-      try {
-        const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-          import('html2canvas'),
-          import('jspdf'),
-        ]);
-
-        const captureHeight = Math.max(1, Math.ceil(el.scrollHeight));
-        const canvas = await (html2canvas as (node: HTMLElement, opts?: object) => Promise<HTMLCanvasElement>)(el, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          width: 794,
-          height: captureHeight,
-          windowWidth: 794,
-        });
-
-        if (!canvas.width || !canvas.height || !Number.isFinite(canvas.height)) {
-          toast({ title: 'PDF үүсгэхэд алдаа гарлаа', variant: 'destructive' });
-          return;
-        }
-
-        const imgWidth = 210;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        const doc = new jsPDF('p', 'mm', 'a4');
-        const pngData = canvas.toDataURL('image/png');
-        doc.addImage(pngData, 'PNG', 0, 0, imgWidth, imgHeight);
-
-        if (imgHeight > 297) {
-          let heightLeft = imgHeight - 297;
-          let position = -297;
-          while (heightLeft > 0) {
-            doc.addPage();
-            doc.addImage(pngData, 'PNG', 0, position, imgWidth, imgHeight);
-            heightLeft -= 297;
-            position -= 297;
-          }
-        }
-
-        const orderCode = String(order.orderCode || order._id);
-        doc.save(`receipt-${orderCode}.pdf`);
-      } catch (err) {
-        console.error('PDF generation failed:', err);
-        toast({ title: 'PDF үүсгэхэд алдаа гарлаа', variant: 'destructive' });
-      } finally {
-        pageEls.forEach((p, i) => {
-          p.style.display = prevPageDisplays[i];
-        });
-        el.style.width = prevWidth;
-        el.style.minHeight = prevMinHeight;
-      }
-    } catch (err) {
-      console.error('PDF generation failed:', err);
-      toast({ title: 'PDF үүсгэхэд алдаа гарлаа', variant: 'destructive' });
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleDownloadPNG = async () => {
-    if (!receiptRef.current || typeof window === 'undefined' || pngLoading) return;
-    setPngLoading(true);
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
-    try {
-      const { default: html2canvas } = await import('html2canvas');
-      const pageEls = Array.from(receiptRef.current.querySelectorAll<HTMLElement>('.receipt-paper-page'));
-      if (pageEls.length === 0) return;
-
-      const baseName = `Захиалгын_баримт_${preset.label}_${order.orderCode || order._id}`;
-
-      const triggerDownload = (href: string, filename: string) => {
-        const a = document.createElement('a');
-        a.href = href;
-        a.download = filename;
-        a.rel = 'noopener';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      };
-
-      for (let i = 0; i < pageEls.length; i++) {
-        await withSinglePageVisible(pageEls, i, async (el) => {
-          const prevW = el.style.width;
-          const prevH = el.style.height;
-          const prevBox = el.style.boxSizing;
-          try {
-            applyCapturePixelBox(el, preset.sheetW, preset.sheetH);
-            await doubleRaf();
-
-            const canvas = await (html2canvas as (node: HTMLElement, opts?: object) => Promise<HTMLCanvasElement>)(
-              el,
-              {
-                scale: 2,
-                useCORS: true,
-                logging: false,
-              }
-            );
-
-            if (!isValidCanvasSize(canvas)) {
-              console.error('OrderReceipt PNG: invalid canvas dimensions');
-              return;
-            }
-
-            const dataUrl = canvas.toDataURL('image/png');
-            const filename =
-              pageEls.length > 1 ? `${baseName}_хуудас${i + 1}.png` : `${baseName}.png`;
-            triggerDownload(dataUrl, filename);
-          } catch (e) {
-            console.error('OrderReceipt PNG: ' + (e instanceof Error ? e.message : String(e)));
-          } finally {
-            el.style.width = prevW;
-            el.style.height = prevH;
-            el.style.boxSizing = prevBox;
-          }
-        });
-        if (i < pageEls.length - 1) {
-          await doubleRaf();
-        }
-      }
-    } catch (e) {
-      console.error('OrderReceipt PNG: ' + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setPngLoading(false);
-    }
   };
 
   const regBoxes = (
@@ -628,7 +357,7 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
   );
 
   const renderHeaderBlock = () => (
-    <div className="receipt-sheet-top" style={{ width: '100%' }}>
+    <div className="receipt-sheet-top" style={{ width: '100%', flexShrink: 0 }}>
       <div
         style={{
           display: 'flex',
@@ -640,7 +369,7 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
         }}
       >
         <div style={{ flexShrink: 0 }}>НХМаяг БМ-3</div>
-        <div style={{ textAlign: 'right', maxWidth: `${preset.legalNoteMaxMm}mm`, lineHeight: 1.35 }}>
+        <div style={{ textAlign: 'right', maxWidth: `${preset.legalNoteMaxMm}mm`, lineHeight: 1.35, fontSize: '9px' }}>
           Сангийн сайдын 2017 оны 12 дугаар сарын 5-ны өдрийн<br />
           347 тоот тушаалын хавсралт
         </div>
@@ -717,13 +446,13 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
 
   const renderFooterBlock = () => (
     <div
-      className="footer receipt-sheet-footer"
+      className="receipt-sheet-footer receipt-footer"
       style={{
-        marginTop: '10mm',
-        paddingTop: '4mm',
+        marginTop: 'auto',
+        paddingTop: '12px',
+        flexShrink: 0,
         fontSize: `${preset.footerFontPx}px`,
         width: '100%',
-        borderTop: 'none',
       }}
     >
       <div
@@ -737,7 +466,7 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
         }}
       >
         <div style={{ width: `${preset.stampMm + 4}mm`, flexShrink: 0, alignSelf: 'flex-end' }}>
-          <div style={{ fontSize: `${preset.signatureFontPx}px`, marginBottom: '4px' }}>Тэмдэг</div>
+          <div style={{ fontSize: `${preset.signatureFontPx}px`, marginBottom: '4px' }}>Тамга</div>
           <div
             style={{
               width: `${preset.stampMm}mm`,
@@ -749,11 +478,7 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
         </div>
 
         <div style={{ flex: 1, minWidth: 0, paddingLeft: '2mm', paddingRight: '2mm' }}>
-          {[
-            'Хүлээлгэн өгсөн эд хариуцагч',
-            'Хүлээн авагч',
-            'Шалгасан нягтлан бодогч',
-          ].map((label) => (
+          {['Хүлээлгэн өгсөн эд хариуцагч', 'Хүлээн авагч', 'Шалгасан нягтлан бодогч'].map((label) => (
             <div
               key={label}
               style={{
@@ -776,29 +501,391 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
             </div>
           ))}
         </div>
-
-        <div style={{ width: `${preset.barcodeWmm}mm`, flexShrink: 0, textAlign: 'center', alignSelf: 'flex-end' }}>
-          <ReceiptBarcodeVisual compact={preset.id !== 'a4'} />
-          <div
-            style={{
-              fontSize: preset.id === 'a6' ? '5px' : '8px',
-              letterSpacing: '0.04em',
-              marginTop: '4px',
-              fontFamily: 'Arial, Helvetica, monospace',
-            }}
-          >
-            {barcodeLabel}
-          </div>
-        </div>
       </div>
     </div>
   );
 
-  const cellBorder: CSSProperties = {
+  const cellStyleA4: CSSProperties = {
+    border: '0.5px solid #333',
+    padding: '2px 3px',
+    fontSize: '9px',
+    verticalAlign: 'middle',
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+    textOverflow: 'ellipsis',
+  };
+
+  const cellStyleMm: CSSProperties = {
     border: '1px solid #000',
     padding: preset.id === 'a6' ? '2px' : '3px',
     fontSize: preset.id === 'a6' ? '7px' : '9px',
+    verticalAlign: 'middle',
   };
+
+  const renderTableRows = (
+    pageItems: (OrderItem | null)[],
+    pageIndex: number,
+    isLastPage: boolean,
+    useA4Px: boolean
+  ) => {
+    const startIdx = pageIndex * preset.rowsPerPage;
+    const tdBase = useA4Px ? cellStyleA4 : cellStyleMm;
+
+    return (
+      <>
+        {pageItems.map((item, i) => {
+          const rowNum = item ? startIdx + i + 1 : '';
+          return (
+            <tr
+              key={`${pageIndex}-${i}`}
+              className="receipt-body-row"
+              style={{ height: useA4Px ? '22px' : `${preset.rowHeightMm}mm` }}
+            >
+              <td style={{ ...tdBase, textAlign: 'center', width: useA4Px ? A4_COL_PX.no : undefined }}>{rowNum}</td>
+              <td style={{ ...tdBase, width: useA4Px ? A4_NAME_PX : undefined }}>
+                {item ? item.product?.name || 'Устгагдсан бараа' : ''}
+              </td>
+              <td style={{ ...tdBase, textAlign: 'center', width: useA4Px ? A4_COL_PX.code : undefined }}>
+                {item ? item.product?.code || '-' : ''}
+              </td>
+              <td style={{ ...tdBase, textAlign: 'center', width: useA4Px ? A4_COL_PX.unit : undefined }}>
+                {item ? 'ш' : ''}
+              </td>
+              <td style={{ ...tdBase, textAlign: 'center', width: useA4Px ? A4_COL_PX.qty : undefined }}>
+                {item ? item.quantity : ''}
+              </td>
+              <td style={{ ...tdBase, textAlign: 'right', width: useA4Px ? A4_COL_PX.price : undefined }}>
+                {item ? `₮${(item.price || 0).toLocaleString()}` : ''}
+              </td>
+              <td style={{ ...tdBase, textAlign: 'right', width: useA4Px ? A4_COL_PX.total : undefined }}>
+                {item ? `₮${((item.price || 0) * (item.quantity || 0)).toLocaleString()}` : ''}
+              </td>
+            </tr>
+          );
+        })}
+        {isLastPage && (
+          <tr style={{ borderTop: '1px solid #000', fontWeight: 'bold' }}>
+            <td colSpan={6} style={{ ...tdBase, textAlign: 'right', borderTop: '1px solid #000' }}>
+              Дүн
+            </td>
+            <td
+              style={{
+                ...tdBase,
+                textAlign: 'right',
+                fontWeight: 'bold',
+                fontSize: `${preset.totalRowFontPx}px`,
+                borderTop: '1px solid #000',
+              }}
+            >
+              ₮{(order.total || 0).toLocaleString()}
+            </td>
+          </tr>
+        )}
+      </>
+    );
+  };
+
+  const renderOnePage = (pageItems: (OrderItem | null)[], pageIndex: number, isLastPage: boolean, variant: 'preview' | 'capture') => {
+    const useA4Px = paperFormat === 'a4';
+    const pageClass = cn('receipt-page', paperFormat === 'a4' && 'receipt-page--a4');
+    const thBase = useA4Px ? cellStyleA4 : cellStyleMm;
+
+    const tableWrap = (
+      <div className="receipt-sheet-tablewrap" style={{ flex: 1, minHeight: 0, overflow: 'hidden', width: '100%' }}>
+        <table
+          className="receipt-print-table"
+          style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            tableLayout: 'fixed',
+            fontSize: useA4Px ? '9px' : preset.id === 'a6' ? '7px' : '9px',
+            margin: 0,
+          }}
+        >
+          <colgroup>
+            {useA4Px ? (
+              <>
+                <col style={{ width: A4_COL_PX.no }} />
+                <col style={{ width: A4_NAME_PX }} />
+                <col style={{ width: A4_COL_PX.code }} />
+                <col style={{ width: A4_COL_PX.unit }} />
+                <col style={{ width: A4_COL_PX.qty }} />
+                <col style={{ width: A4_COL_PX.price }} />
+                <col style={{ width: A4_COL_PX.total }} />
+              </>
+            ) : (
+              <>
+                <col className="receipt-col-no" style={{ width: `${preset.cols.no}mm` }} />
+                <col className="receipt-col-name" style={{ width: `${preset.cols.name}mm` }} />
+                <col className="receipt-col-code" style={{ width: `${preset.cols.code}mm` }} />
+                <col className="receipt-col-unit" style={{ width: `${preset.cols.unit}mm` }} />
+                <col className="receipt-col-qty" style={{ width: `${preset.cols.qty}mm` }} />
+                <col className="receipt-col-price" style={{ width: `${preset.cols.price}mm` }} />
+                <col className="receipt-col-total" style={{ width: `${preset.cols.total}mm` }} />
+              </>
+            )}
+          </colgroup>
+          <thead>
+            <tr>
+              <th style={{ ...thBase, textAlign: 'center', background: '#f0f0f0', fontWeight: 'bold', fontSize: '8px' }}>№</th>
+              <th style={{ ...thBase, textAlign: 'center', background: '#f0f0f0', fontWeight: 'bold', fontSize: '8px' }}>
+                Материалын үнэт зүйлийн нэр, зэрэг, дугаар
+              </th>
+              <th style={{ ...thBase, textAlign: 'center', background: '#f0f0f0', fontWeight: 'bold', fontSize: '8px' }}>Код</th>
+              <th style={{ ...thBase, textAlign: 'center', background: '#f0f0f0', fontWeight: 'bold', fontSize: '8px' }}>
+                Хэм-
+                <br />
+                жих нэгж
+              </th>
+              <th style={{ ...thBase, textAlign: 'center', background: '#f0f0f0', fontWeight: 'bold', fontSize: '8px' }}>Тоо</th>
+              <th style={{ ...thBase, textAlign: 'center', background: '#f0f0f0', fontWeight: 'bold', fontSize: '8px' }}>
+                Худалдах
+                <br />
+                Нэгжийн үнэ
+              </th>
+              <th style={{ ...thBase, textAlign: 'center', background: '#f0f0f0', fontWeight: 'bold', fontSize: '8px' }}>Нийт дүн</th>
+            </tr>
+          </thead>
+          <tbody>{renderTableRows(pageItems, pageIndex, isLastPage, useA4Px)}</tbody>
+        </table>
+      </div>
+    );
+
+    if (paperFormat === 'a4') {
+      return (
+        <div
+          key={`${variant}-${paperFormat}-${pageIndex}`}
+          className={pageClass}
+          data-capture={variant}
+          style={{
+            width: A4_PX.pageW,
+            height: A4_PX.pageH,
+            padding: A4_PX.pad,
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            background: '#fff',
+            fontFamily: '"Times New Roman", Times, serif',
+            pageBreakAfter: isLastPage ? 'avoid' : 'always',
+          }}
+        >
+          {renderHeaderBlock()}
+          {tableWrap}
+          {renderFooterBlock()}
+        </div>
+      );
+    }
+
+    return (
+      <div
+        key={`${variant}-${paperFormat}-${pageIndex}`}
+        className={pageClass}
+        data-capture={variant}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          width: `min(${preset.sheetW}mm, calc(100vw - 16px))`,
+          maxWidth: '100%',
+          minHeight: `${preset.sheetH}mm`,
+          margin: '0 auto 16px',
+          padding: preset.id === 'a6' ? '4mm' : '8mm',
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+          background: '#fff',
+          border: variant === 'preview' ? '1px solid #e5e7eb' : undefined,
+          pageBreakAfter: isLastPage ? 'avoid' : 'always',
+        }}
+      >
+        {renderHeaderBlock()}
+        {tableWrap}
+        {renderFooterBlock()}
+      </div>
+    );
+  };
+
+  const receiptPagesJsx = (variant: 'preview' | 'capture') => (
+    <>
+      {paddedPages.map((pageItems, pageIndex) =>
+        renderOnePage(pageItems, pageIndex, pageIndex === paddedPages.length - 1, variant)
+      )}
+    </>
+  );
+
+  const handlePrint = async () => {
+    const root = receiptPrintRootRef.current;
+    if (!root || typeof window === 'undefined' || printLoading) return;
+    setPrintLoading(true);
+    await doubleRaf();
+    try {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        const styles = buildPrintEmbeddedStyles(preset);
+        printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Захиалгын баримт - ${order.orderCode || order._id}</title><style>${styles}</style></head><body>${root.innerHTML}</body></html>`);
+        printWindow.document.close();
+        printWindow.focus();
+        await doubleRaf();
+        printWindow.print();
+      }
+    } catch (e) {
+      console.error('OrderReceipt print: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setPrintLoading(false);
+    }
+  };
+
+  const capturePageDimensions = () => {
+    if (paperFormat === 'a4') {
+      return { width: A4_PX.pageW, height: A4_PX.pageH };
+    }
+    return {
+      width: Math.round(preset.sheetW * MM_TO_PX),
+      height: Math.round(preset.sheetH * MM_TO_PX),
+    };
+  };
+
+  const handleDownloadPDF = async () => {
+    if (typeof window === 'undefined' || isGenerating) return;
+    const container = document.getElementById('receipt-pdf-container');
+    if (!container) {
+      toast({ title: 'PDF үүсгэхэд алдаа гарлаа', variant: 'destructive' });
+      return;
+    }
+
+    const pageEls = Array.from(container.querySelectorAll<HTMLElement>('.receipt-page'));
+    if (pageEls.length === 0) {
+      toast({ title: 'PDF үүсгэхэд алдаа гарлаа', variant: 'destructive' });
+      return;
+    }
+
+    const { width: capW, height: capH } = capturePageDimensions();
+
+    setIsGenerating(true);
+    try {
+      await doubleRaf();
+      await doubleRaf();
+
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+
+      const doc = new jsPDF('p', 'mm', preset.jspdf);
+
+      for (let i = 0; i < pageEls.length; i++) {
+        const page = pageEls[i];
+        const canvas = await (html2canvas as (node: HTMLElement, opts?: object) => Promise<HTMLCanvasElement>)(page, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          width: capW,
+          height: capH,
+          windowWidth: capW,
+        });
+
+        if (!isValidCanvasSize(canvas)) {
+          toast({ title: 'PDF үүсгэхэд алдаа гарлаа', variant: 'destructive' });
+          return;
+        }
+
+        const imgData = canvas.toDataURL('image/png');
+        if (i > 0) doc.addPage();
+        const pageWmm = preset.sheetW;
+        const pageHmm = preset.sheetH;
+        doc.addImage(imgData, 'PNG', 0, 0, pageWmm, pageHmm);
+      }
+
+      doc.save(`receipt-${String(order.orderCode || order._id)}.pdf`);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      toast({ title: 'PDF үүсгэхэд алдаа гарлаа', variant: 'destructive' });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleDownloadPNG = async () => {
+    if (typeof window === 'undefined' || pngLoading) return;
+    const container = document.getElementById('receipt-pdf-container');
+    if (!container) return;
+
+    const pageEls = Array.from(container.querySelectorAll<HTMLElement>('.receipt-page'));
+    if (pageEls.length === 0) return;
+
+    const { width: capW, height: capH } = capturePageDimensions();
+
+    setPngLoading(true);
+    await doubleRaf();
+    try {
+      const { default: html2canvas } = await import('html2canvas');
+      const baseName = `Захиалгын_баримт_${preset.label}_${order.orderCode || order._id}`;
+
+      const triggerDownload = (href: string, filename: string) => {
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = filename;
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      };
+
+      for (let i = 0; i < pageEls.length; i++) {
+        const el = pageEls[i];
+        const prevW = el.style.width;
+        const prevH = el.style.height;
+        const prevBox = el.style.boxSizing;
+        try {
+          applyCapturePixelBox(el, preset.sheetW, preset.sheetH);
+          await doubleRaf();
+
+          const canvas = await (html2canvas as (node: HTMLElement, opts?: object) => Promise<HTMLCanvasElement>)(el, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            width: capW,
+            height: capH,
+            windowWidth: capW,
+          });
+
+          if (!isValidCanvasSize(canvas)) continue;
+
+          const dataUrl = canvas.toDataURL('image/png');
+          const filename = pageEls.length > 1 ? `${baseName}_хуудас${i + 1}.png` : `${baseName}.png`;
+          triggerDownload(dataUrl, filename);
+        } catch (e) {
+          console.error('OrderReceipt PNG: ' + (e instanceof Error ? e.message : String(e)));
+        } finally {
+          el.style.width = prevW;
+          el.style.height = prevH;
+          el.style.boxSizing = prevBox;
+        }
+        if (i < pageEls.length - 1) await doubleRaf();
+      }
+    } finally {
+      setPngLoading(false);
+    }
+  };
+
+  const portalContent =
+    mounted &&
+    createPortal(
+      <div
+        id="receipt-pdf-container"
+        aria-hidden
+        style={{
+          position: 'absolute',
+          left: '-9999px',
+          top: 0,
+          width: paperFormat === 'a4' ? A4_PX.pageW : Math.round(preset.sheetW * MM_TO_PX),
+          zIndex: -1,
+          pointerEvents: 'none',
+        }}
+      >
+        <div className="receipt-print-root receipt-capture-root">{receiptPagesJsx('capture')}</div>
+      </div>,
+      document.body
+    );
 
   return (
     <div>
@@ -831,175 +918,35 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
           {pngLoading ? 'Уншиж байна...' : 'PNG татах'}
         </Button>
         {totalPages > 1 && (
-          <div className="flex items-center gap-2 text-sm ml-auto">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={receiptPage <= 1}
-              onClick={() => setReceiptPage((p) => Math.max(1, p - 1))}
-            >
-              Өмнөх
-            </Button>
-            <span className="text-gray-700 whitespace-nowrap">
-              {receiptPage} / {totalPages}
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={receiptPage >= totalPages}
-              onClick={() => setReceiptPage((p) => Math.min(totalPages, p + 1))}
-            >
-              Дараах
-            </Button>
-          </div>
+          <span className="text-sm text-muted-foreground ml-auto">{totalPages} хуудас</span>
         )}
       </div>
 
       <div
         id="receipt-preview"
-        ref={receiptRef}
-        data-paper={paperFormat}
-        className={cn(
-          'receipt-print-root receipt-container bg-white w-full mx-auto px-2 sm:px-0',
-          paperFormat === 'a4' && 'max-w-[210mm]',
-          paperFormat === 'a5' && 'max-w-[148mm]',
-          paperFormat === 'a6' && 'max-w-[105mm]'
-        )}
+        className="receipt-modal-scroll"
         style={{
-          fontFamily: 'Arial, Helvetica, sans-serif',
-          width: `min(${preset.sheetW}mm, 100%)`,
-          maxWidth: '100%',
-          margin: '0 auto',
-          boxSizing: 'border-box',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          maxHeight: '80vh',
+          padding: '0 8px',
         }}
       >
-        {chunks.map((chunk, pageIndex) => {
-          const rows = preset.rowsPerPage;
-          const startIdx = pageIndex * rows;
-          const isLastPage = pageIndex === chunks.length - 1;
-          const emptyRows = Math.max(0, rows - chunk.length);
-          const visibleOnScreen = receiptPage === pageIndex + 1;
-
-          return (
-            <div
-              key={`${paperFormat}-${pageIndex}`}
-              className="receipt-paper-page"
-              style={{
-                display: visibleOnScreen ? 'flex' : 'none',
-                flexDirection: 'column',
-                minHeight: `${preset.sheetH}mm`,
-                width: `min(${preset.sheetW}mm, calc(100vw - 16px))`,
-                maxWidth: '100%',
-                margin: '0 auto',
-                boxSizing: 'border-box',
-              }}
-            >
-              {renderHeaderBlock()}
-
-              <div className="receipt-sheet-tablewrap" style={{ width: '100%' }}>
-                <table
-                  className="receipt-print-table"
-                  style={{
-                    width: `${preset.innerW}mm`,
-                    maxWidth: '100%',
-                    borderCollapse: 'collapse',
-                    margin: '8px 0 0',
-                    fontSize: preset.id === 'a6' ? '7px' : '9px',
-                    border: '1px solid #000',
-                    tableLayout: 'fixed',
-                  }}
-                >
-                  <colgroup>
-                    <col className="receipt-col-no" style={{ width: `${preset.cols.no}mm` }} />
-                    <col className="receipt-col-name" style={{ width: `${preset.cols.name}mm` }} />
-                    <col className="receipt-col-code" style={{ width: `${preset.cols.code}mm` }} />
-                    <col className="receipt-col-unit" style={{ width: `${preset.cols.unit}mm` }} />
-                    <col className="receipt-col-qty" style={{ width: `${preset.cols.qty}mm` }} />
-                    <col className="receipt-col-price" style={{ width: `${preset.cols.price}mm` }} />
-                    <col className="receipt-col-total" style={{ width: `${preset.cols.total}mm` }} />
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th style={{ ...cellBorder, textAlign: 'center' }}>№</th>
-                      <th style={{ ...cellBorder, textAlign: 'center' }}>
-                        Материалын үнэт зүйлийн нэр, зэрэг, дугаар
-                      </th>
-                      <th style={{ ...cellBorder, textAlign: 'center' }}>Код</th>
-                      <th style={{ ...cellBorder, textAlign: 'center' }}>
-                        Хэм-<br />жих нэгж
-                      </th>
-                      <th style={{ ...cellBorder, textAlign: 'center' }}>Тоо</th>
-                      <th style={{ ...cellBorder, textAlign: 'center' }}>
-                        Худалдах
-                        <br />
-                        Нэгжийн үнэ
-                      </th>
-                      <th style={{ ...cellBorder, textAlign: 'center' }}>Нийт дүн</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {chunk.map((item, index) => {
-                      const rowNum = startIdx + index + 1;
-                      return (
-                        <tr key={`${pageIndex}-${index}`} className="receipt-body-row">
-                          <td style={{ ...cellBorder, textAlign: 'center' }}>{rowNum}</td>
-                          <td style={{ ...cellBorder }}>{item.product?.name || 'Устгагдсан бараа'}</td>
-                          <td style={{ ...cellBorder, textAlign: 'center' }}>{item.product?.code || '-'}</td>
-                          <td style={{ ...cellBorder, textAlign: 'center' }}>ш</td>
-                          <td style={{ ...cellBorder, textAlign: 'center' }}>{item.quantity}</td>
-                          <td style={{ ...cellBorder, textAlign: 'right' }}>₮{(item.price || 0).toLocaleString()}</td>
-                          <td style={{ ...cellBorder, textAlign: 'right' }}>
-                            ₮{((item.price || 0) * (item.quantity || 0)).toLocaleString()}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {Array.from({ length: emptyRows }).map((_, index) => {
-                      const rowNum = startIdx + chunk.length + index + 1;
-                      return (
-                        <tr key={`empty-${pageIndex}-${index}`} className="receipt-body-row">
-                          <td style={{ ...cellBorder, textAlign: 'center' }}>{rowNum}</td>
-                          <td style={cellBorder}></td>
-                          <td style={cellBorder}></td>
-                          <td style={cellBorder}></td>
-                          <td style={cellBorder}></td>
-                          <td style={cellBorder}></td>
-                          <td style={cellBorder}></td>
-                        </tr>
-                      );
-                    })}
-                    {isLastPage && (
-                      <tr>
-                        <td colSpan={2} style={{ ...cellBorder, fontWeight: 'bold' }}>
-                          Дүн
-                        </td>
-                        <td style={cellBorder}></td>
-                        <td style={cellBorder}></td>
-                        <td style={cellBorder}></td>
-                        <td style={cellBorder}></td>
-                        <td
-                          style={{
-                            ...cellBorder,
-                            textAlign: 'right',
-                            fontWeight: 'bold',
-                            fontSize: `${preset.totalRowFontPx}px`,
-                          }}
-                        >
-                          ₮{(order.total || 0).toLocaleString()}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {renderFooterBlock()}
-            </div>
-          );
-        })}
+        <div
+          id="receipt-print-root"
+          ref={receiptPrintRootRef}
+          className="receipt-print-root receipt-container bg-white w-full mx-auto"
+          style={{
+            width: paperFormat === 'a4' ? A4_PX.pageW : `min(${preset.sheetW}mm, 100%)`,
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
+          {receiptPagesJsx('preview')}
+        </div>
       </div>
+
+      {portalContent}
     </div>
   );
 }

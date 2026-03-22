@@ -10,20 +10,33 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .receipt-paper-page {
+  .receipt-page {
     display: flex !important;
     flex-direction: column !important;
     box-sizing: border-box !important;
     page-break-after: always !important;
     break-after: page !important;
+    overflow: hidden !important;
   }
-  .receipt-paper-page:last-child {
-    page-break-after: auto !important;
+  .receipt-page:last-child {
+    page-break-after: avoid !important;
     break-after: auto !important;
   }
   .receipt-sheet-footer {
     margin-top: auto !important;
+    flex-shrink: 0 !important;
   }
+  .receipt-sheet-tablewrap {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+}
+
+/* Desktop: admin receipt preview width (794px A4 + padding) */
+.receipt-modal {
+  width: min(900px, 95vw);
+  max-width: 95vw;
 }
 
 .receipt-print-root .receipt-print-table {

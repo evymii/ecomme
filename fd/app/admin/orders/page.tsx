@@ -835,7 +835,7 @@ export default function AdminOrdersPage() {
       <div
         ref={sheetOverlayRef}
         className={cn(
-          'fixed inset-0 z-20 flex items-end justify-center transition-opacity duration-200',
+          'fixed inset-0 z-20 flex items-end justify-center transition-opacity duration-200 sm:items-center',
           isDetailsOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
         )}
       >
@@ -848,7 +848,7 @@ export default function AdminOrdersPage() {
         />
         <div
           className={cn(
-            'relative z-[1] flex max-h-[88%] w-full flex-col rounded-t-[14px] bg-white shadow-xl transition-transform duration-200',
+            'relative z-[1] flex max-h-[88%] w-full flex-col rounded-t-[14px] bg-white shadow-xl transition-transform duration-200 sm:max-h-[92vh] sm:w-[min(900px,95vw)] sm:max-w-[95vw] sm:rounded-[14px]',
             isDetailsOpen ? 'translate-y-0' : 'translate-y-full'
           )}
           onClick={(e) => e.stopPropagation()}
@@ -899,9 +899,9 @@ export default function AdminOrdersPage() {
                 </button>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain overflow-x-hidden">
                 {showReceipt ? (
-                  <div className="px-[13px] pb-6 pt-2.5">
+                  <div className="receipt-modal mx-auto w-full min-w-0 px-[13px] pb-6 pt-2.5">
                     <OrderReceipt order={selectedOrder} />
                   </div>
                 ) : (
