@@ -215,7 +215,7 @@ function ProductsContent() {
           type="button"
           onClick={() => handleBigCategoryClick(null)}
           className={cn(
-            'flex h-[76px] w-[148px] shrink-0 items-center justify-center rounded-2xl border px-2 py-2 text-sm font-light tracking-wide transition-all duration-300',
+            'flex h-[56px] w-[148px] shrink-0 items-center justify-center rounded-2xl border px-2 py-1.5 text-sm font-light tracking-wide transition-all duration-300',
             selectedBigCategory === null
               ? 'bg-[#02111B] text-white shadow-lg scale-105 border-transparent'
               : 'bg-white text-[#5D737E] border-[#02111B]/10 hover:border-[#5D737E]/30'
@@ -231,7 +231,7 @@ function ProductsContent() {
             key={entry.big}
             onClick={() => handleBigCategoryClick(entry.big)}
             className={cn(
-              'flex h-[76px] w-[148px] shrink-0 items-center justify-center rounded-2xl border px-2 py-2 text-sm font-light tracking-wide transition-all duration-300',
+              'flex h-[56px] w-[148px] shrink-0 items-center justify-center rounded-2xl border px-2 py-1.5 text-sm font-light tracking-wide transition-all duration-300',
               selectedBigCategory === entry.big
                 ? 'bg-[#02111B] text-white shadow-lg scale-105 border-transparent'
                 : 'bg-white text-[#5D737E] border-[#02111B]/10 hover:border-[#5D737E]/30'
@@ -248,7 +248,7 @@ function ProductsContent() {
             type="button"
             onClick={() => handleMiniCategoryClick(null)}
             className={cn(
-              'flex h-[60px] w-[124px] shrink-0 items-center justify-center rounded-xl border px-2 py-1.5 text-xs font-light transition-colors',
+              'flex h-[46px] w-[124px] shrink-0 items-center justify-center rounded-xl border px-2 py-1 text-xs font-light transition-colors',
               selectedMiniCategory === null
                 ? 'bg-[#02111B] text-white border-[#02111B]'
                 : 'bg-white text-[#5D737E] border-[#02111B]/15 hover:border-[#5D737E]/30'
@@ -262,7 +262,7 @@ function ProductsContent() {
               key={mini.fullName}
               onClick={() => handleMiniCategoryClick(mini.fullName)}
               className={cn(
-                'flex h-[60px] w-[124px] shrink-0 items-center justify-center rounded-xl border px-2 py-1.5 text-xs font-light transition-colors',
+                'flex h-[46px] w-[124px] shrink-0 items-center justify-center rounded-xl border px-2 py-1 text-xs font-light transition-colors',
                 selectedMiniCategory === mini.fullName
                   ? 'bg-[#02111B] text-white border-[#02111B]'
                   : 'bg-white text-[#5D737E] border-[#02111B]/15 hover:border-[#5D737E]/30'

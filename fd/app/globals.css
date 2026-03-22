@@ -9,51 +9,55 @@
   .receipt-container.receipt-print-root {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-    width: 190mm !important;
-    max-width: 190mm !important;
-    min-height: 277mm !important;
+    width: 97mm !important;
+    max-width: 97mm !important;
+    min-height: 132mm !important;
     margin: 0 auto !important;
     padding: 0 !important;
     box-sizing: border-box !important;
   }
-  .receipt-a4-page {
-    display: block !important;
-    width: 190mm !important;
-    min-height: 277mm !important;
+  .receipt-a6-page {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 97mm !important;
+    min-height: 132mm !important;
     box-sizing: border-box !important;
     page-break-after: always !important;
     break-after: page !important;
   }
-  .receipt-a4-page:last-child {
+  .receipt-a6-page:last-child {
     page-break-after: auto !important;
     break-after: auto !important;
   }
+  .receipt-sheet-footer {
+    margin-top: auto !important;
+  }
 }
 
-/* Receipt table column widths (mm) — screen + print preview */
+/* Receipt table column widths (mm) — A6 inner width ~97mm — screen + print */
 .receipt-print-root .receipt-print-table {
   table-layout: fixed;
 }
 .receipt-print-root col.receipt-col-no {
-  width: 8mm;
+  width: 5mm;
 }
 .receipt-print-root col.receipt-col-name {
-  width: 72mm;
+  width: 38mm;
 }
 .receipt-print-root col.receipt-col-code {
-  width: 16mm;
+  width: 11mm;
 }
 .receipt-print-root col.receipt-col-unit {
-  width: 14mm;
+  width: 10mm;
 }
 .receipt-print-root col.receipt-col-qty {
-  width: 14mm;
+  width: 10mm;
 }
 .receipt-print-root col.receipt-col-price {
-  width: 22mm;
+  width: 11mm;
 }
 .receipt-print-root col.receipt-col-total {
-  width: 24mm;
+  width: 12mm;
 }
 
 @layer utilities {
