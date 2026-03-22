@@ -17,6 +17,21 @@ import api from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle2 } from 'lucide-react';
 
+/** Log Clerk API errors (includes `.errors[]` with `longMessage`). */
+function logClerkError(context: string, err: unknown) {
+  const e = err as {
+    errors?: Array<{ code?: string; longMessage?: string; message?: string; meta?: unknown }>;
+    message?: string;
+  };
+  const payload = e?.errors ?? err;
+  console.error(`Clerk ${context}:`, JSON.stringify(payload, null, 2));
+  return (
+    e?.errors?.[0]?.longMessage ??
+    e?.errors?.[0]?.message ??
+    (typeof e?.message === 'string' ? e.message : null)
+  );
+}
+
 interface AuthModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -56,8 +71,8 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
     }
   };
   
-  // Clerk hook — only used for email verification during signup
-  const { signUp: clerkSignUp, isLoaded: signUpLoaded } = useSignUp();
+  // Clerk: email OTP for sign-up; setActive completes the Clerk session after OTP (required for reliable delivery / state).
+  const { isLoaded: signUpLoaded, signUp: clerkSignUp, setActive } = useSignUp();
 
   const resetForm = () => {
     setPhoneNumber('');
@@ -148,7 +163,7 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
       return;
     }
 
-    if (!signUpLoaded || !clerkSignUp) {
+    if (!signUpLoaded || !clerkSignUp || !setActive) {
       toast({ title: 'Алдаа', description: 'Clerk ачаалагдаагүй байна. Хуудсыг дахин ачаалаарай.', variant: 'destructive' });
       return;
     }
@@ -165,22 +180,49 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
 
     setLoading(true);
     try {
-      // Generate a strong random password for Clerk only (we don't use Clerk for sign-in)
-      // This avoids Clerk's "password too simple" / "pwned password" errors
-      const randomPart = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+      const randomPart =
+        Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
       const clerkPassword = `Az!${randomPart}Sv#${Date.now()}`;
-      
-      try {
-        // Try creating a new Clerk account
-        await clerkSignUp.create({
-          emailAddress: email.trim(),
-          password: clerkPassword,
-        });
 
-        // Send email verification code (OTP)
-        await clerkSignUp.prepareEmailAddressVerification({
-          strategy: 'email_code',
-        });
+      try {
+        // Step 1: create sign-up — prefer email-only (matches Dashboard "verification code" OTP flow).
+        try {
+          await clerkSignUp.create({
+            emailAddress: email.trim(),
+          });
+        } catch (createErr: unknown) {
+          logClerkError('signUp.create(email-only)', createErr);
+          const err = createErr as { errors?: Array<{ code?: string; meta?: { paramName?: string } }> };
+          const needsPassword = err?.errors?.some(
+            (x) =>
+              x.code === 'form_param_missing' ||
+              x.meta?.paramName === 'password' ||
+              (x.code ?? '').toLowerCase().includes('password')
+          );
+          if (needsPassword) {
+            await clerkSignUp.create({
+              emailAddress: email.trim(),
+              password: clerkPassword,
+            });
+          } else {
+            throw createErr;
+          }
+        }
+
+        // Step 2: send OTP to email (email_code, not link)
+        try {
+          await clerkSignUp.prepareEmailAddressVerification({
+            strategy: 'email_code',
+          });
+        } catch (prepErr: unknown) {
+          const msg = logClerkError('prepareEmailAddressVerification', prepErr);
+          toast({
+            title: 'Алдаа',
+            description: msg ?? 'Код илгээхэд алдаа гарлаа. Clerk тохиргоо (email_code, Development vs Production) шалгана уу.',
+            variant: 'destructive',
+          });
+          return;
+        }
 
         setPendingVerification(true);
         toast({
@@ -188,32 +230,42 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
           description: `${email} хаяг руу баталгаажуулах код илгээлээ. Имэйлээ шалгана уу.`,
           duration: 6000,
         });
-      } catch (clerkError: any) {
-        const errorCode = clerkError.errors?.[0]?.code || '';
-        const errorMsg = clerkError.errors?.[0]?.longMessage || clerkError.errors?.[0]?.message || '';
-        
+      } catch (clerkError: unknown) {
+        logClerkError('signUp flow', clerkError);
+        const clerkErr = clerkError as {
+          errors?: Array<{ code?: string; longMessage?: string; message?: string }>;
+        };
+        const errorCode = clerkErr.errors?.[0]?.code || '';
+        const errorMsg =
+          clerkErr.errors?.[0]?.longMessage || clerkErr.errors?.[0]?.message || '';
+
         if (errorCode === 'form_identifier_exists' || errorMsg.includes('already') || errorMsg.includes('taken')) {
-          // Email exists in Clerk (stale record from previous attempt)
-          // Check our own backend to decide what to do
           try {
             await handleExistingClerkAccount();
-          } catch (fallbackErr: any) {
+          } catch (fallbackErr: unknown) {
             console.error('Existing account fallback error:', fallbackErr);
             toast({
               title: 'Алдаа',
-              description: fallbackErr.response?.data?.message || 'Бүртгэл шалгахад алдаа гарлаа. Дахин оролдоно уу.',
+              description:
+                (fallbackErr as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+                'Бүртгэл шалгахад алдаа гарлаа. Дахин оролдоно уу.',
               variant: 'destructive',
             });
           }
-        } else if (errorMsg.includes('email')) {
+        } else if (errorMsg.toLowerCase().includes('email')) {
           toast({ title: 'Алдаа', description: 'Имэйл хаяг буруу байна', variant: 'destructive' });
         } else {
-          toast({ title: 'Алдаа', description: errorMsg || 'Бүртгэл үүсгэхэд алдаа гарлаа', variant: 'destructive' });
+          toast({
+            title: 'Алдаа',
+            description: errorMsg || 'Бүртгэл үүсгэхэд алдаа гарлаа',
+            variant: 'destructive',
+          });
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
       console.error('Sign up error:', error);
-      toast({ title: 'Алдаа', description: error.message || 'Бүртгэл үүсгэхэд алдаа гарлаа', variant: 'destructive' });
+      toast({ title: 'Алдаа', description: msg || 'Бүртгэл үүсгэхэд алдаа гарлаа', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -230,49 +282,69 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
 
     setLoading(true);
     try {
-      if (!signUpLoaded || !clerkSignUp) {
+      if (!signUpLoaded || !clerkSignUp || !setActive) {
         toast({ title: 'Алдаа', description: 'Clerk ачаалагдаагүй байна', variant: 'destructive' });
         return;
       }
 
-      const result = await clerkSignUp.attemptEmailAddressVerification({
-        code: otpCode.trim(),
-      });
+      let result;
+      try {
+        result = await clerkSignUp.attemptEmailAddressVerification({
+          code: otpCode.trim(),
+        });
+      } catch (verifyErr: unknown) {
+        logClerkError('attemptEmailAddressVerification', verifyErr);
+        const err = verifyErr as {
+          errors?: Array<{ code?: string; longMessage?: string; message?: string }>;
+        };
+        let errorMessage = err.errors?.[0]?.longMessage ?? err.errors?.[0]?.message ?? 'Баталгаажуулахад алдаа гарлаа';
+        const code = err.errors?.[0]?.code || '';
+        const msg = (err.errors?.[0]?.longMessage || err.errors?.[0]?.message || '').toLowerCase();
+        if (code === 'form_code_incorrect' || msg.includes('incorrect') || msg.includes('invalid')) {
+          errorMessage = 'Баталгаажуулах код буруу байна';
+        } else if (msg.includes('expired')) {
+          errorMessage = 'Код хүчинтэй хугацаа дууссан. Дахин илгээнэ үү.';
+        }
+        toast({ title: 'Алдаа', description: errorMessage, variant: 'destructive' });
+        return;
+      }
 
       if (result.status === 'complete') {
-        // Email verified! Create user in our backend
+        if (result.createdSessionId) {
+          try {
+            await setActive({ session: result.createdSessionId });
+          } catch (activeErr: unknown) {
+            const activeMsg = logClerkError('setActive after OTP', activeErr);
+            toast({
+              title: 'Анхааруулга',
+              description:
+                activeMsg ?? 'Clerk session идэвхжүүлэхэд алдаа гарлаа. Backend бүртгэлийг үргэлжлүүлнэ.',
+              variant: 'destructive',
+            });
+          }
+        }
         try {
           await createBackendUser();
-        } catch (backendError: any) {
+        } catch (backendError: unknown) {
+          const be = backendError as { response?: { data?: { message?: string } } };
           console.error('Backend signup error:', backendError);
           toast({
             title: 'Анхааруулга',
-            description: backendError.response?.data?.message || 'Имэйл баталгаажсан. Серверт алдаа гарлаа, дахин нэвтрэнэ үү.',
+            description: be.response?.data?.message || 'Имэйл баталгаажсан. Серверт алдаа гарлаа, дахин нэвтрэнэ үү.',
             variant: 'destructive',
           });
         }
       } else {
         toast({ title: 'Алдаа', description: 'Баталгаажуулалт дуусаагүй байна. Дахин оролдоно уу.', variant: 'destructive' });
       }
-    } catch (error: any) {
-      console.error('OTP verification error:', JSON.stringify(error.errors || error.message || error));
-      
-      let errorMessage = 'Баталгаажуулахад алдаа гарлаа';
-      if (error.errors && error.errors.length > 0) {
-        const clerkErr = error.errors[0];
-        const code = clerkErr.code || '';
-        const msg = clerkErr.longMessage || clerkErr.message || '';
-        
-        if (code === 'form_code_incorrect' || msg.includes('incorrect') || msg.includes('invalid')) {
-          errorMessage = 'Баталгаажуулах код буруу байна';
-        } else if (msg.includes('expired')) {
-          errorMessage = 'Код хүчинтэй хугацаа дууссан. Дахин илгээнэ үү.';
-        } else {
-          errorMessage = msg || errorMessage;
-        }
-      }
-      
-      toast({ title: 'Алдаа', description: errorMessage, variant: 'destructive' });
+    } catch (error: unknown) {
+      logClerkError('handleVerifyOtp unexpected', error);
+      toast({
+        title: 'Алдаа',
+        description:
+          (error as { message?: string })?.message || 'Баталгаажуулахад алдаа гарлаа',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
@@ -284,9 +356,13 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
       if (!signUpLoaded || !clerkSignUp) return;
       await clerkSignUp.prepareEmailAddressVerification({ strategy: 'email_code' });
       toast({ title: 'Код дахин илгээлээ', description: `${email} руу шинэ код илгээлээ` });
-    } catch (error: any) {
-      console.error('Resend OTP error:', error);
-      toast({ title: 'Алдаа', description: 'Код илгээхэд алдаа гарлаа. Түр хүлээгээд дахин оролдоно уу.', variant: 'destructive' });
+    } catch (err: unknown) {
+      const msg = logClerkError('prepareEmailAddressVerification (resend)', err);
+      toast({
+        title: 'Алдаа',
+        description: msg ?? 'Код илгээхэд алдаа гарлаа. Түр хүлээгээд дахин оролдоно уу.',
+        variant: 'destructive',
+      });
     }
   };
 
