@@ -209,60 +209,66 @@ function ProductsContent() {
         </p>
       </div>
 
-      {/* Main Categories - Horizontal Pills */}
-      <div className="flex gap-2.5 overflow-x-auto pb-4 mb-6 md:mb-8 scrollbar-hide">
+      {/* Main Categories — single horizontal row, scroll */}
+      <div className="flex flex-nowrap gap-2.5 overflow-x-auto pb-4 mb-6 md:mb-8 scrollbar-hide min-w-0">
         <button
+          type="button"
           onClick={() => handleBigCategoryClick(null)}
           className={cn(
-            'px-4 py-2 rounded-2xl min-h-11 max-w-[9.5rem] md:max-w-none text-center leading-tight whitespace-normal break-words flex-shrink-0 transition-all duration-300 text-sm font-light tracking-wide',
+            'flex h-[76px] w-[148px] shrink-0 items-center justify-center rounded-2xl border px-2 py-2 text-sm font-light tracking-wide transition-all duration-300',
             selectedBigCategory === null
-              ? 'bg-[#02111B] text-white shadow-lg scale-105'
-              : 'bg-white text-[#5D737E] border border-[#02111B]/10 hover:border-[#5D737E]/30'
+              ? 'bg-[#02111B] text-white shadow-lg scale-105 border-transparent'
+              : 'bg-white text-[#5D737E] border-[#02111B]/10 hover:border-[#5D737E]/30'
           )}
         >
-          Бүгд
+          <span className="line-clamp-2 w-full text-center leading-tight [word-break:break-word]">
+            Бүгд
+          </span>
         </button>
         {hierarchy.map((entry) => (
           <button
+            type="button"
             key={entry.big}
             onClick={() => handleBigCategoryClick(entry.big)}
             className={cn(
-              'px-4 py-2 rounded-2xl min-h-11 max-w-[9.5rem] md:max-w-none text-center leading-tight whitespace-normal break-words flex-shrink-0 transition-all duration-300 text-sm font-light tracking-wide',
+              'flex h-[76px] w-[148px] shrink-0 items-center justify-center rounded-2xl border px-2 py-2 text-sm font-light tracking-wide transition-all duration-300',
               selectedBigCategory === entry.big
-                ? 'bg-[#02111B] text-white shadow-lg scale-105'
-                : 'bg-white text-[#5D737E] border border-[#02111B]/10 hover:border-[#5D737E]/30'
+                ? 'bg-[#02111B] text-white shadow-lg scale-105 border-transparent'
+                : 'bg-white text-[#5D737E] border-[#02111B]/10 hover:border-[#5D737E]/30'
             )}
           >
-            {entry.big}
+            <span className="line-clamp-2 w-full text-center leading-tight [word-break:break-word]">{entry.big}</span>
           </button>
         ))}
       </div>
 
       {selectedHierarchy && selectedHierarchy.minis.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-3 mb-6 -mt-4 md:-mt-5 scrollbar-hide">
+        <div className="flex flex-nowrap gap-2 overflow-x-auto pb-3 mb-6 -mt-4 md:-mt-5 scrollbar-hide min-w-0">
           <button
+            type="button"
             onClick={() => handleMiniCategoryClick(null)}
             className={cn(
-              'px-3 py-1.5 rounded-xl whitespace-nowrap text-xs md:text-sm border transition-colors',
+              'flex h-[60px] w-[124px] shrink-0 items-center justify-center rounded-xl border px-2 py-1.5 text-xs font-light transition-colors',
               selectedMiniCategory === null
                 ? 'bg-[#02111B] text-white border-[#02111B]'
                 : 'bg-white text-[#5D737E] border-[#02111B]/15 hover:border-[#5D737E]/30'
             )}
           >
-            Бүгд
+            <span className="line-clamp-2 w-full text-center leading-snug [word-break:break-word]">Бүгд</span>
           </button>
           {selectedHierarchy.minis.map((mini) => (
             <button
+              type="button"
               key={mini.fullName}
               onClick={() => handleMiniCategoryClick(mini.fullName)}
               className={cn(
-                'px-3 py-1.5 rounded-xl text-left text-xs md:text-sm max-w-[11rem] md:max-w-none whitespace-normal break-words border transition-colors',
+                'flex h-[60px] w-[124px] shrink-0 items-center justify-center rounded-xl border px-2 py-1.5 text-xs font-light transition-colors',
                 selectedMiniCategory === mini.fullName
                   ? 'bg-[#02111B] text-white border-[#02111B]'
                   : 'bg-white text-[#5D737E] border-[#02111B]/15 hover:border-[#5D737E]/30'
               )}
             >
-              {mini.label}
+              <span className="line-clamp-2 w-full text-center leading-snug [word-break:break-word]">{mini.label}</span>
             </button>
           ))}
         </div>

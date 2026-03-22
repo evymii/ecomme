@@ -280,18 +280,19 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
 
       <section className="border-t border-[#02111B]/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-10">
-          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+          <div className="flex flex-nowrap gap-3 overflow-x-auto pb-2 scrollbar-hide min-w-0">
             {categoryNames.map((category) => (
               <button
+                type="button"
                 key={category}
                 onClick={() => handleCategoryFilter(category)}
-                className={`px-5 py-2 rounded-full whitespace-nowrap transition-all duration-300 font-light tracking-wide text-sm ${
+                className={`flex h-[76px] w-[148px] shrink-0 items-center justify-center rounded-2xl border px-2 py-2 text-sm font-light tracking-wide transition-all duration-300 ${
                   selectedCategory === category
-                    ? 'bg-[#02111B] text-white shadow-lg scale-105'
+                    ? 'bg-[#02111B] text-white shadow-lg scale-105 border-transparent'
                     : 'bg-white text-[#5D737E] border border-[#02111B]/10 hover:border-[#5D737E]/30 hover:bg-white'
                 }`}
               >
-                {category}
+                <span className="line-clamp-2 w-full text-center leading-tight [word-break:break-word]">{category}</span>
               </button>
             ))}
           </div>
