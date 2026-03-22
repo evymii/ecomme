@@ -286,7 +286,7 @@ export default function HomePageClient({ initialData }: HomePageClientProps) {
                 type="button"
                 key={category}
                 onClick={() => handleCategoryFilter(category)}
-                className={`flex h-[56px] w-[148px] shrink-0 items-center justify-center rounded-2xl border px-2 py-1.5 text-sm font-light tracking-wide transition-all duration-300 ${
+                className={`flex h-[38px] w-[99px] shrink-0 items-center justify-center rounded-2xl border px-1.5 py-1 text-xs font-light tracking-wide transition-all duration-300 md:h-[56px] md:w-[148px] md:px-2 md:py-1.5 md:text-sm ${
                   selectedCategory === category
                     ? 'bg-[#02111B] text-white shadow-lg scale-105 border-transparent'
                     : 'bg-white text-[#5D737E] border border-[#02111B]/10 hover:border-[#5D737E]/30 hover:bg-white'

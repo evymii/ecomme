@@ -334,7 +334,7 @@ export default function Header() {
             </div>
 
             {/* Right: Search + Actions */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
               {/* Desktop Search Bar (non-admin) */}
               {showUserUi && (
                 <div ref={searchRef} className="relative hidden sm:block">
@@ -376,7 +376,7 @@ export default function Header() {
                       100,
                     );
                   }}
-                  className="sm:hidden p-2 hover:bg-white rounded-full transition-colors"
+                  className="sm:hidden p-1.5 sm:p-2 hover:bg-white rounded-full transition-colors"
                 >
                   <Search className="w-5 h-5 text-[#02111B]" />
                 </button>
@@ -388,7 +388,7 @@ export default function Header() {
                   {showUserUi && (
                     <Link
                       href="/profile"
-                      className="p-2 hover:bg-white rounded-full transition-colors"
+                      className="p-1.5 sm:p-2 hover:bg-white rounded-full transition-colors"
                       title={user.name}
                     >
                       <User className="w-5 h-5 text-[#02111B]" />
@@ -396,7 +396,7 @@ export default function Header() {
                   )}
                   <button
                     onClick={handleLogout}
-                    className="p-2 hover:bg-white rounded-full transition-colors"
+                    className="p-1.5 sm:p-2 hover:bg-white rounded-full transition-colors"
                     title="Гарах"
                   >
                     <LogOut className="w-5 h-5 text-[#3F4045]" />
@@ -405,7 +405,7 @@ export default function Header() {
               ) : (
                 <button
                   onClick={() => setAuthOpen(true)}
-                  className="p-2 hover:bg-white rounded-full transition-colors"
+                  className="p-1.5 sm:p-2 hover:bg-white rounded-full transition-colors"
                 >
                   <User className="w-5 h-5 text-[#02111B]" />
                 </button>
@@ -415,7 +415,7 @@ export default function Header() {
               {showUserUi && (
                 <Link
                   href="/profile/favorites"
-                  className="relative p-2 hover:bg-white rounded-full transition-colors"
+                  className="relative p-1.5 sm:p-2 hover:bg-white rounded-full transition-colors"
                   title="Зүрхэлсэн"
                 >
                   <Heart className="w-5 h-5 text-[#02111B]" />
@@ -431,7 +431,7 @@ export default function Header() {
               {showUserUi && (
                 <button
                   onClick={() => setCartOpen(true)}
-                  className="relative p-2 hover:bg-white rounded-full transition-colors"
+                  className="relative p-1.5 sm:p-2 hover:bg-white rounded-full transition-colors"
                 >
                   <ShoppingCart className="w-5 h-5 text-[#02111B]" />
                   {mounted && itemCount > 0 && (

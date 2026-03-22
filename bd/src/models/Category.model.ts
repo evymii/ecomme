@@ -6,6 +6,7 @@ export interface ICategory extends Document {
   description?: string;
   isActive: boolean;
   parent?: mongoose.Types.ObjectId | null;
+  sortOrder?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,6 +34,10 @@ const CategorySchema = new Schema<ICategory>(
       type: Schema.Types.ObjectId,
       ref: 'Category',
       default: null
+    },
+    sortOrder: {
+      type: Number,
+      default: 0
     }
   },
   {

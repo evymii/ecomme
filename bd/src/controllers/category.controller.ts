@@ -42,7 +42,7 @@ export const getAllCategories = async (req: Request, res: Response): Promise<voi
 
     const query = isAdminRequest ? {} : { isActive: true };
     const categories = await Category.find(query)
-      .select('name nameEn description isActive createdAt parent')
+      .select('name nameEn description isActive createdAt parent sortOrder')
       .populate('parent', 'name')
       .sort({ name: 1 })
       .lean()
@@ -78,7 +78,7 @@ export const getAllCategories = async (req: Request, res: Response): Promise<voi
 
 export const createCategory = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, nameEn, description, isActive, parentId } = req.body;
+    const { name, nameEn, description, isActive, parentId, sortOrder } = req.body;
 
     if (!name) {
       res.status(400).json({ success: false, message: 'Ангиллын нэр оруулна уу' });
@@ -120,6 +120,7 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
       description: description?.trim(),
       isActive: isActive !== undefined ? isActive : true,
       parent: parent ? parent._id : null,
+      sortOrder: sortOrder !== undefined && sortOrder !== '' ? Number(sortOrder) : 0,
     });
 
     await category.save();
@@ -142,7 +143,7 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
 export const updateCategory = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { name, nameEn, description, isActive, parentId } = req.body;
+    const { name, nameEn, description, isActive, parentId, sortOrder } = req.body;
 
     const category = await Category.findById(id);
     if (!category) {
@@ -189,6 +190,9 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
     if (description !== undefined) category.description = description?.trim();
     if (isActive !== undefined) category.isActive = isActive;
     category.parent = parent ? parent._id : null;
+    if (sortOrder !== undefined && sortOrder !== '') {
+      (category as any).sortOrder = Number(sortOrder);
+    }
 
     await category.save();
 

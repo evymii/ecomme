@@ -459,56 +459,52 @@ export default function AdminOrdersPage() {
             />
           </div>
 
-          <div className="md:flex-1 md:flex md:justify-end">
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-              <div className="flex gap-2 items-center">
-                <Input
-                  id="admin-order-start-date"
-                  name="adminOrderStartDate"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  autoComplete="off"
-                  className="w-32 md:w-36 text-xs md:text-sm"
-                />
-                <span className="text-sm text-gray-600">-</span>
-                <Input
-                  id="admin-order-end-date"
-                  name="adminOrderEndDate"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  autoComplete="off"
-                  className="w-32 md:w-36 text-xs md:text-sm"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={setOneWeek}
-                  className="text-xs md:text-sm whitespace-nowrap"
-                >
-                  1 долоо хоног
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={setOneMonth}
-                  className="text-xs md:text-sm whitespace-nowrap"
-                >
-                  1 сар
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDeleteSelectedOrders}
-                  disabled={deletingSelected || selectedOrderIds.length === 0}
-                  className="text-xs md:text-sm whitespace-nowrap border-red-400 text-red-700 hover:bg-red-50"
-                >
-                  {deletingSelected ? 'Устгаж байна...' : `Устгах (${selectedOrderIds.length})`}
-                </Button>
-              </div>
+          <div className="md:flex-1 md:flex md:justify-end min-w-0">
+            <div className="flex flex-nowrap items-center gap-1 sm:gap-2 overflow-x-auto max-w-full [scrollbar-width:thin] [-ms-overflow-style:auto] py-0">
+              <Input
+                id="admin-order-start-date"
+                name="adminOrderStartDate"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                autoComplete="off"
+                className="h-8 shrink-0 w-[7.25rem] sm:w-32 md:w-36 px-1.5 sm:px-3 text-[11px] sm:text-xs md:text-sm"
+              />
+              <span className="text-gray-600 shrink-0 text-xs leading-none">-</span>
+              <Input
+                id="admin-order-end-date"
+                name="adminOrderEndDate"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                autoComplete="off"
+                className="h-8 shrink-0 w-[7.25rem] sm:w-32 md:w-36 px-1.5 sm:px-3 text-[11px] sm:text-xs md:text-sm"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={setOneWeek}
+                className="h-8 shrink-0 px-1.5 sm:px-3 text-[11px] sm:text-xs md:text-sm whitespace-nowrap"
+              >
+                1 долоо хоног
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={setOneMonth}
+                className="h-8 shrink-0 px-1.5 sm:px-3 text-[11px] sm:text-xs md:text-sm whitespace-nowrap"
+              >
+                1 сар
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDeleteSelectedOrders}
+                disabled={deletingSelected || selectedOrderIds.length === 0}
+                className="h-8 shrink-0 px-1.5 sm:px-3 text-[11px] sm:text-xs md:text-sm whitespace-nowrap border-red-400 text-red-700 hover:bg-red-50"
+              >
+                {deletingSelected ? 'Устгаж байна...' : `Устгах (${selectedOrderIds.length})`}
+              </Button>
             </div>
           </div>
         </div>
