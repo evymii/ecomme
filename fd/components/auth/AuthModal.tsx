@@ -145,36 +145,13 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
 
     setLoading(true);
     try {
-      const randomPart =
-        Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
-      const clerkPassword = `Az!${randomPart}Sv#${Date.now()}`;
-
       try {
-        // Step 1: create sign-up — prefer email-only (matches Dashboard "verification code" OTP flow).
-        try {
-          await clerkSignUp.create({
-            emailAddress: email.trim(),
-          });
-        } catch (createErr: unknown) {
-          logClerkError('signUp.create(email-only)', createErr);
-          const err = createErr as { errors?: Array<{ code?: string; meta?: { paramName?: string } }> };
-          const needsPassword = err?.errors?.some(
-            (x) =>
-              x.code === 'form_param_missing' ||
-              x.meta?.paramName === 'password' ||
-              (x.code ?? '').toLowerCase().includes('password')
-          );
-          if (needsPassword) {
-            await clerkSignUp.create({
-              emailAddress: email.trim(),
-              password: clerkPassword,
-            });
-          } else {
-            throw createErr;
-          }
-        }
+        // Clerk: email ONLY — no firstName, password, phone, username (see Clerk Dashboard: email required, rest off).
+        await clerkSignUp.create({
+          emailAddress: email.trim(),
+        });
 
-        // Step 2: send OTP to email (email_code, not link)
+        // Send OTP to email (email_code, not link)
         try {
           await clerkSignUp.prepareEmailAddressVerification({
             strategy: 'email_code',
@@ -270,20 +247,31 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
 
       console.log('Clerk OTP result status:', result.status);
 
-      if (result.status === 'complete') {
-        try {
-          await createBackendUser();
-        } catch (backendError: unknown) {
-          const be = backendError as { response?: { data?: { message?: string } } };
-          console.error('Backend signup error:', backendError);
-          toast({
-            title: 'Алдаа',
-            description: be.response?.data?.message || 'Бүртгэл хадгалахад алдаа гарлаа',
-            variant: 'destructive',
-          });
-        }
-      } else {
-        toast({ title: 'Алдаа', description: 'Баталгаажуулалт дуусаагүй байна. Дахин оролдоно уу.', variant: 'destructive' });
+      if (result.status === 'missing_requirements') {
+        console.error('Missing requirements:', JSON.stringify(result, null, 2));
+        toast({
+          title: 'Тохиргооны алдаа гарлаа. Дахин оролдоно уу.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (result.status !== 'complete') {
+        console.error('Unexpected Clerk status:', result.status, JSON.stringify(result, null, 2));
+        toast({ title: 'OTP баталгаажуулалт амжилтгүй', variant: 'destructive' });
+        return;
+      }
+
+      try {
+        await createBackendUser();
+      } catch (backendError: unknown) {
+        const be = backendError as { response?: { data?: { message?: string } } };
+        console.error('Backend signup error:', backendError);
+        toast({
+          title: 'Алдаа',
+          description: be.response?.data?.message || 'Бүртгэл хадгалахад алдаа гарлаа',
+          variant: 'destructive',
+        });
       }
     } catch (error: unknown) {
       logClerkError('handleVerifyOtp unexpected', error);
