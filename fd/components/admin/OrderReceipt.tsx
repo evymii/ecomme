@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Printer, Download, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 const REG_BOX_COUNT = 7;
 
@@ -180,6 +181,54 @@ function chunkOrderItems(items: OrderItem[], rowsPerPage: number): OrderItem[][]
   return chunks;
 }
 
+const MM_TO_PX = 96 / 25.4;
+
+function doubleRaf(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
+function isValidCanvasSize(canvas: HTMLCanvasElement): boolean {
+  const w = canvas.width;
+  const h = canvas.height;
+  return Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0;
+}
+
+function applyCapturePixelBox(el: HTMLElement, sheetWmm: number, sheetHmm: number) {
+  const rect = el.getBoundingClientRect();
+  let w = Math.round(rect.width);
+  let h = Math.round(rect.height);
+  if (!w || !h) {
+    w = Math.max(1, Math.round(sheetWmm * MM_TO_PX));
+    h = Math.max(1, Math.round(sheetHmm * MM_TO_PX));
+  }
+  el.style.width = `${w}px`;
+  el.style.height = `${h}px`;
+  el.style.boxSizing = 'border-box';
+}
+
+async function withSinglePageVisible<T>(
+  pages: HTMLElement[],
+  pageIndex: number,
+  run: (el: HTMLElement) => Promise<T>
+): Promise<T> {
+  const prev = pages.map((p) => p.style.display);
+  pages.forEach((p, j) => {
+    p.style.display = j === pageIndex ? 'flex' : 'none';
+  });
+  await doubleRaf();
+  try {
+    return await run(pages[pageIndex]);
+  } finally {
+    pages.forEach((p, i) => {
+      p.style.display = prev[i];
+    });
+  }
+}
+
 function formatBarcodeDigits(orderCode: string | undefined): string {
   const digits = (orderCode || '').replace(/\D/g, '');
   const pad = digits.padStart(13, '0').slice(0, 13);
@@ -331,9 +380,13 @@ function buildPrintEmbeddedStyles(p: PaperPreset): string {
 }
 
 export default function OrderReceipt({ order }: OrderReceiptProps) {
+  const { toast } = useToast();
   const receiptRef = useRef<HTMLDivElement>(null);
   const [receiptPage, setReceiptPage] = useState(1);
   const [paperFormat, setPaperFormat] = useState<PaperFormat>('a4');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [pngLoading, setPngLoading] = useState(false);
+  const [printLoading, setPrintLoading] = useState(false);
 
   const preset = PAPER_PRESETS[paperFormat];
   const items = order.items || [];
@@ -370,8 +423,11 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
     return `${year} оны ${month} сарын ${day} өдөр`;
   };
 
-  const handlePrint = () => {
-    if (receiptRef.current) {
+  const handlePrint = async () => {
+    if (!receiptRef.current || typeof window === 'undefined' || printLoading) return;
+    setPrintLoading(true);
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    try {
       const printWindow = window.open('', '_blank');
       if (printWindow) {
         const styles = buildPrintEmbeddedStyles(preset);
@@ -391,66 +447,110 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
         `);
         printWindow.document.close();
         printWindow.focus();
-        setTimeout(() => {
-          printWindow.print();
-        }, 250);
+        await doubleRaf();
+        printWindow.print();
       }
+    } catch (e) {
+      console.error('OrderReceipt print: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setPrintLoading(false);
     }
   };
 
   const handleDownloadPDF = async () => {
-    if (!receiptRef.current || typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || isGenerating) return;
 
+    const el = document.getElementById('receipt-preview');
+    if (!el) {
+      toast({ title: 'PDF үүсгэхэд алдаа гарлаа', variant: 'destructive' });
+      return;
+    }
+
+    const pageEls = Array.from(el.querySelectorAll<HTMLElement>('.receipt-paper-page'));
+    const prevPageDisplays = pageEls.map((p) => p.style.display);
+    const prevWidth = el.style.width;
+    const prevMinHeight = el.style.minHeight;
+
+    setIsGenerating(true);
     try {
-      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-        import('html2canvas'),
-        import('jspdf'),
-      ]);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
-      const pages = receiptRef.current.querySelectorAll<HTMLElement>('.receipt-paper-page');
-      if (pages.length === 0) return;
+      pageEls.forEach((p) => {
+        p.style.display = 'flex';
+      });
+      el.style.width = '794px';
+      el.style.minHeight = '1123px';
 
-      const pdf = new jsPDF('p', 'mm', preset.jspdf);
-      const pageWidth = preset.sheetW;
-      const pageHeight = preset.sheetH;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
-      for (let i = 0; i < pages.length; i++) {
-        const el = pages[i];
-        const canvas = await (html2canvas as (el: HTMLElement, opts?: object) => Promise<HTMLCanvasElement>)(el, {
+      try {
+        const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+          import('html2canvas'),
+          import('jspdf'),
+        ]);
+
+        const captureHeight = Math.max(1, Math.ceil(el.scrollHeight));
+        const canvas = await (html2canvas as (node: HTMLElement, opts?: object) => Promise<HTMLCanvasElement>)(el, {
           scale: 2,
           useCORS: true,
           logging: false,
-          width: el.offsetWidth,
-          height: el.offsetHeight,
+          width: 794,
+          height: captureHeight,
+          windowWidth: 794,
         });
 
-        const imgData = canvas.toDataURL('image/jpeg', 0.92);
-        let drawW = pageWidth;
-        let drawH = (canvas.height * drawW) / canvas.width;
-        if (drawH > pageHeight) {
-          drawH = pageHeight;
-          drawW = (canvas.width * drawH) / canvas.height;
+        if (!canvas.width || !canvas.height || !Number.isFinite(canvas.height)) {
+          toast({ title: 'PDF үүсгэхэд алдаа гарлаа', variant: 'destructive' });
+          return;
         }
-        const offsetX = (pageWidth - drawW) / 2;
 
-        if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', offsetX, 0, drawW, drawH);
+        const imgWidth = 210;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pngData = canvas.toDataURL('image/png');
+        doc.addImage(pngData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+        if (imgHeight > 297) {
+          let heightLeft = imgHeight - 297;
+          let position = -297;
+          while (heightLeft > 0) {
+            doc.addPage();
+            doc.addImage(pngData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= 297;
+            position -= 297;
+          }
+        }
+
+        const orderCode = String(order.orderCode || order._id);
+        doc.save(`receipt-${orderCode}.pdf`);
+      } catch (err) {
+        console.error('PDF generation failed:', err);
+        toast({ title: 'PDF үүсгэхэд алдаа гарлаа', variant: 'destructive' });
+      } finally {
+        pageEls.forEach((p, i) => {
+          p.style.display = prevPageDisplays[i];
+        });
+        el.style.width = prevWidth;
+        el.style.minHeight = prevMinHeight;
       }
-
-      pdf.save(`Захиалгын_баримт_${preset.label}_${order.orderCode || order._id}.pdf`);
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      handlePrint();
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      toast({ title: 'PDF үүсгэхэд алдаа гарлаа', variant: 'destructive' });
+    } finally {
+      setIsGenerating(false);
     }
   };
 
   const handleDownloadPNG = async () => {
-    if (!receiptRef.current || typeof window === 'undefined') return;
-
+    if (!receiptRef.current || typeof window === 'undefined' || pngLoading) return;
+    setPngLoading(true);
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
     try {
       const { default: html2canvas } = await import('html2canvas');
-      const pages = receiptRef.current.querySelectorAll<HTMLElement>('.receipt-paper-page');
-      if (pages.length === 0) return;
+      const pageEls = Array.from(receiptRef.current.querySelectorAll<HTMLElement>('.receipt-paper-page'));
+      if (pageEls.length === 0) return;
 
       const baseName = `Захиалгын_баримт_${preset.label}_${order.orderCode || order._id}`;
 
@@ -464,25 +564,49 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
         document.body.removeChild(a);
       };
 
-      for (let i = 0; i < pages.length; i++) {
-        const el = pages[i];
-        const canvas = await (html2canvas as (el: HTMLElement, opts?: object) => Promise<HTMLCanvasElement>)(el, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          width: el.offsetWidth,
-          height: el.offsetHeight,
+      for (let i = 0; i < pageEls.length; i++) {
+        await withSinglePageVisible(pageEls, i, async (el) => {
+          const prevW = el.style.width;
+          const prevH = el.style.height;
+          const prevBox = el.style.boxSizing;
+          try {
+            applyCapturePixelBox(el, preset.sheetW, preset.sheetH);
+            await doubleRaf();
+
+            const canvas = await (html2canvas as (node: HTMLElement, opts?: object) => Promise<HTMLCanvasElement>)(
+              el,
+              {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+              }
+            );
+
+            if (!isValidCanvasSize(canvas)) {
+              console.error('OrderReceipt PNG: invalid canvas dimensions');
+              return;
+            }
+
+            const dataUrl = canvas.toDataURL('image/png');
+            const filename =
+              pageEls.length > 1 ? `${baseName}_хуудас${i + 1}.png` : `${baseName}.png`;
+            triggerDownload(dataUrl, filename);
+          } catch (e) {
+            console.error('OrderReceipt PNG: ' + (e instanceof Error ? e.message : String(e)));
+          } finally {
+            el.style.width = prevW;
+            el.style.height = prevH;
+            el.style.boxSizing = prevBox;
+          }
         });
-        const dataUrl = canvas.toDataURL('image/png');
-        const filename =
-          pages.length > 1 ? `${baseName}_хуудас${i + 1}.png` : `${baseName}.png`;
-        triggerDownload(dataUrl, filename);
-        if (i < pages.length - 1) {
-          await new Promise((r) => setTimeout(r, 200));
+        if (i < pageEls.length - 1) {
+          await doubleRaf();
         }
       }
-    } catch (error) {
-      console.error('Error generating PNG:', error);
+    } catch (e) {
+      console.error('OrderReceipt PNG: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setPngLoading(false);
     }
   };
 
@@ -694,17 +818,17 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
             </Button>
           ))}
         </div>
-        <Button onClick={handlePrint} variant="outline" size="sm">
+        <Button onClick={handlePrint} variant="outline" size="sm" disabled={printLoading}>
           <Printer className="w-4 h-4 mr-2" />
-          Хэвлэх
+          {printLoading ? 'Уншиж байна...' : 'Хэвлэх'}
         </Button>
-        <Button onClick={handleDownloadPDF} variant="outline" size="sm">
+        <Button onClick={handleDownloadPDF} variant="outline" size="sm" disabled={isGenerating}>
           <Download className="w-4 h-4 mr-2" />
-          PDF татах
+          {isGenerating ? 'Үүсгэж байна...' : 'PDF татах'}
         </Button>
-        <Button onClick={handleDownloadPNG} variant="outline" size="sm">
+        <Button onClick={handleDownloadPNG} variant="outline" size="sm" disabled={pngLoading}>
           <ImageIcon className="w-4 h-4 mr-2" />
-          PNG татах
+          {pngLoading ? 'Уншиж байна...' : 'PNG татах'}
         </Button>
         {totalPages > 1 && (
           <div className="flex items-center gap-2 text-sm ml-auto">
@@ -734,6 +858,7 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
       </div>
 
       <div
+        id="receipt-preview"
         ref={receiptRef}
         data-paper={paperFormat}
         className={cn(

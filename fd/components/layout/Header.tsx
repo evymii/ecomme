@@ -62,6 +62,8 @@ export default function Header() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mobileSearchRef = useRef<HTMLDivElement>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement>(null);
+  const authTriggerRef = useRef<HTMLButtonElement>(null);
+  const cartTriggerRef = useRef<HTMLButtonElement>(null);
 
   // Track if component is mounted (client-side only)
   useEffect(() => {
@@ -178,6 +180,12 @@ export default function Header() {
   const showDropdown = searchFocused && searchQuery.trim().length > 0;
 
   // Render search dropdown as inline JSX (not a component) to avoid unmount/remount on every render
+  const focusMobileSearchInput = () => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => mobileSearchInputRef.current?.focus());
+    });
+  };
+
   const searchDropdownContent = showDropdown ? (
     <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-[#02111B]/10 max-h-[70vh] overflow-y-auto z-50">
       {searchLoading ? (
@@ -368,13 +376,10 @@ export default function Header() {
               {/* Mobile Search Button (non-admin) */}
               {showUserUi && (
                 <button
+                  type="button"
                   onClick={() => {
                     setSearchFocused(true);
-                    // Focus mobile input after render
-                    setTimeout(
-                      () => mobileSearchInputRef.current?.focus(),
-                      100,
-                    );
+                    focusMobileSearchInput();
                   }}
                   className="sm:hidden p-1.5 sm:p-2 hover:bg-white rounded-full transition-colors"
                 >
@@ -404,6 +409,8 @@ export default function Header() {
                 </>
               ) : (
                 <button
+                  ref={authTriggerRef}
+                  type="button"
                   onClick={() => setAuthOpen(true)}
                   className="p-1.5 sm:p-2 hover:bg-white rounded-full transition-colors"
                 >
@@ -430,6 +437,8 @@ export default function Header() {
               {/* Cart (non-admin) */}
               {showUserUi && (
                 <button
+                  ref={cartTriggerRef}
+                  type="button"
                   onClick={() => setCartOpen(true)}
                   className="relative p-1.5 sm:p-2 hover:bg-white rounded-full transition-colors"
                 >
@@ -572,8 +581,16 @@ export default function Header() {
         </>
       )}
 
-      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
-      <CartSidebar open={cartOpen} onOpenChange={setCartOpen} />
+      <AuthModal
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+        returnFocusRef={authTriggerRef}
+      />
+      <CartSidebar
+        open={cartOpen}
+        onOpenChange={setCartOpen}
+        returnFocusRef={cartTriggerRef}
+      />
     </>
   );
 }

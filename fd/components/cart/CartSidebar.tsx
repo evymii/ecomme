@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { useCartStore } from '@/store/cart-store';
 import { X, Plus, Minus } from 'lucide-react';
@@ -12,14 +12,28 @@ import { cn } from '@/lib/utils';
 interface CartSidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
-export default function CartSidebar({ open, onOpenChange }: CartSidebarProps) {
+export default function CartSidebar({ open, onOpenChange, returnFocusRef }: CartSidebarProps) {
   const items = useCartStore((state) => state.items);
   const updateQuantity = useCartStore((state) => state.updateQuantity);
   const removeItem = useCartStore((state) => state.removeItem);
   const clearCart = useCartStore((state) => state.clearCart);
   const total = useCartStore((state) => state.getTotal());
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const prevOpen = useRef(open);
+
+  useLayoutEffect(() => {
+    if (!prevOpen.current && open) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => closeBtnRef.current?.focus());
+      });
+    } else if (prevOpen.current && !open) {
+      requestAnimationFrame(() => returnFocusRef?.current?.focus());
+    }
+    prevOpen.current = open;
+  }, [open, returnFocusRef]);
 
   // Prevent body scroll when sidebar is open
   useEffect(() => {
@@ -65,8 +79,11 @@ export default function CartSidebar({ open, onOpenChange }: CartSidebarProps) {
                 </button>
               )}
               <button
+                ref={closeBtnRef}
+                type="button"
                 onClick={() => onOpenChange(false)}
                 className="text-gray-400 hover:text-black p-1.5 transition-colors"
+                aria-label="Хаах"
               >
                 <X className="w-5 h-5 md:w-4 md:h-4" />
               </button>

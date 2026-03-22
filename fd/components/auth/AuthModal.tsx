@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSignUp } from '@clerk/nextjs';
 import {
   Dialog,
@@ -20,9 +20,11 @@ import { CheckCircle2 } from 'lucide-react';
 interface AuthModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Element to restore focus when the dialog closes (no Radix Trigger). */
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
-export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
+export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthModalProps) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
@@ -68,6 +70,31 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
     setSuccessMessage('');
   };
 
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+  const resetFormRef = useRef(resetForm);
+  resetFormRef.current = resetForm;
+
+  useEffect(() => {
+    if (!showSuccess) return;
+    const id = window.setTimeout(() => {
+      resetFormRef.current();
+      onOpenChangeRef.current(false);
+      requestAnimationFrame(() => returnFocusRef?.current?.focus());
+    }, 2000);
+    return () => clearTimeout(id);
+  }, [showSuccess, returnFocusRef]);
+
+  const handleDialogOpenChange = (isOpen: boolean) => {
+    if (!isOpen) {
+      resetForm();
+      requestAnimationFrame(() => {
+        returnFocusRef?.current?.focus();
+      });
+    }
+    onOpenChange(isOpen);
+  };
+
   // ========== Helper: Create user in our backend ==========
   const createBackendUser = async () => {
     const response = await api.post('/auth/signup', {
@@ -87,11 +114,6 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
       setSuccessMessage(`Сайн байна уу, ${name.trim()}! Бүртгэл амжилттай баталгаажлаа.`);
       setShowSuccess(true);
-
-      setTimeout(() => {
-        resetForm();
-        onOpenChange(false);
-      }, 2000);
       return true;
     } else {
       throw new Error(response.data?.message || 'Backend бүртгэлд алдаа гарлаа');
@@ -320,12 +342,6 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
         // Show success screen
         setSuccessMessage(`Сайн байна уу, ${response.data.user.name || 'Хэрэглэгч'}! Нэвтрэх амжилттай.`);
         setShowSuccess(true);
-
-        // Auto close after 2 seconds
-        setTimeout(() => {
-          resetForm();
-          onOpenChange(false);
-        }, 2000);
       } else {
         throw new Error(response.data?.message || 'Нэвтрэхэд алдаа гарлаа');
       }
@@ -346,7 +362,7 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
   // ========== RENDER: Success Screen ==========
   if (showSuccess) {
     return (
-      <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) { resetForm(); } onOpenChange(isOpen); }}>
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
         <DialogContent className={mobileDialogClassName}>
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
@@ -363,7 +379,7 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
   // ========== RENDER: OTP Verification Step ==========
   if (pendingVerification) {
     return (
-      <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) resetForm(); onOpenChange(isOpen); }}>
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
         <DialogContent className={mobileDialogClassName}>
           <DialogHeader className="space-y-2 md:space-y-3">
             <DialogTitle className="text-xl md:text-2xl">Имэйл баталгаажуулалт</DialogTitle>
@@ -409,7 +425,7 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
   // ========== RENDER: Main Sign In / Sign Up Form ==========
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) resetForm(); onOpenChange(isOpen); }}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className={mobileDialogClassName}>
         <DialogHeader className="space-y-2 md:space-y-3">
           <DialogTitle className="text-xl md:text-2xl">{isSignUp ? 'Бүртгүүлэх' : 'Нэвтрэх'}</DialogTitle>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import {
@@ -46,6 +46,7 @@ interface ProductModalProps {
   onOpenChange: (open: boolean) => void;
   product: Product | null;
   onSuccess: () => void;
+  returnFocusRef?: React.MutableRefObject<HTMLElement | null>;
 }
 
 function IconClose({ className }: { className?: string }) {
@@ -80,6 +81,7 @@ export default function ProductModal({
   onOpenChange,
   product,
   onSuccess,
+  returnFocusRef,
 }: ProductModalProps) {
   const [formData, setFormData] = useState({
     code: '',
@@ -103,10 +105,41 @@ export default function ProductModal({
   const [categories, setCategories] = useState<Array<{ _id: string; name: string }>>([]);
   const [mounted, setMounted] = useState(false);
   const { toast } = useToast();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const wasOpen = useRef(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useLayoutEffect(() => {
+    const root = document.getElementById('__next');
+    if (!open || !root) return;
+    root.setAttribute('inert', '');
+    return () => {
+      root.removeAttribute('inert');
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) panelRef.current?.querySelector('button')?.focus();
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (wasOpen.current && !open && returnFocusRef?.current) {
+      returnFocusRef.current.focus();
+    }
+    wasOpen.current = open;
+  }, [open, returnFocusRef]);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -318,6 +351,7 @@ export default function ProductModal({
       onClick={() => onOpenChange(false)}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         className="flex max-h-[82vh] w-[calc(100%-28px)] max-w-lg flex-col overflow-hidden rounded-[12px] border border-[#e0e0e0] bg-white shadow-xl"

@@ -1,5 +1,7 @@
 # Deployment Build Checklist
 
+**Full environment variable inventory:** see [`ENV.md`](./ENV.md) (required keys, optional keys, and how to verify them in Vercel Production).
+
 ## ✅ Backend (bd) - Ready for Deployment
 
 ### Configuration Files

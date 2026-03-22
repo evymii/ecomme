@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import {
@@ -33,6 +33,7 @@ interface CategoryModalProps {
   onOpenChange: (open: boolean) => void;
   category: Category | null;
   onSuccess: () => void;
+  returnFocusRef?: React.MutableRefObject<HTMLElement | null>;
 }
 
 function IconClose({ className }: { className?: string }) {
@@ -56,6 +57,7 @@ export default function CategoryModal({
   onOpenChange,
   category,
   onSuccess,
+  returnFocusRef,
 }: CategoryModalProps) {
   const [formData, setFormData] = useState({
     name: '',
@@ -68,10 +70,41 @@ export default function CategoryModal({
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const { toast } = useToast();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const wasOpen = useRef(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useLayoutEffect(() => {
+    const root = document.getElementById('__next');
+    if (!open || !root) return;
+    root.setAttribute('inert', '');
+    return () => {
+      root.removeAttribute('inert');
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) panelRef.current?.querySelector('button')?.focus();
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (wasOpen.current && !open && returnFocusRef?.current) {
+      returnFocusRef.current.focus();
+    }
+    wasOpen.current = open;
+  }, [open, returnFocusRef]);
 
   useEffect(() => {
     if (!open) return;
@@ -175,6 +208,7 @@ export default function CategoryModal({
       onClick={() => onOpenChange(false)}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         className="flex max-h-[90vh] w-[calc(100%-28px)] max-w-md flex-col overflow-hidden rounded-[12px] border border-[#e0e0e0] bg-white shadow-xl"

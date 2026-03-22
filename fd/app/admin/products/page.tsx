@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Header from '@/components/layout/Header';
 import { Input } from '@/components/ui/input';
 import ProductModal from '@/components/admin/ProductModal';
@@ -114,12 +114,25 @@ function IconImagePlaceholder({ className }: { className?: string }) {
   );
 }
 
+const PAGE_LIMIT = 20;
+
+interface AdminCategoryRow {
+  name?: string;
+  fullName?: string;
+}
+
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [categoriesForFilter, setCategoriesForFilter] = useState<AdminCategoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const showLoader = useDelayedLoading(loading, 250);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const productModalTriggerRef = useRef<HTMLElement | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBigCategory, setSelectedBigCategory] = useState<string | null>(null);
   const [selectedMiniCategory, setSelectedMiniCategory] = useState<string | null>(null);
@@ -167,8 +180,8 @@ export default function AdminProductsPage() {
       string,
       { minis: Array<{ label: string; fullName: string }> }
     >();
-    for (const product of products) {
-      const rawName = (product.category || '').trim();
+    for (const cat of categoriesForFilter) {
+      const rawName = (cat.fullName || cat.name || '').trim();
       if (!rawName) continue;
       const [bigRaw, ...rest] = rawName.split('/');
       const big = bigRaw.trim();
@@ -191,7 +204,7 @@ export default function AdminProductsPage() {
           .sort((a, b) => a.label.localeCompare(b.label, 'mn')),
       }))
       .sort((a, b) => a.big.localeCompare(b.big, 'mn'));
-  }, [products]);
+  }, [categoriesForFilter]);
 
   const selectedHierarchy = useMemo(() => {
     if (!selectedBigCategory) return null;
@@ -233,19 +246,39 @@ export default function AdminProductsPage() {
     }));
 
   const fetchProducts = useCallback(
-    async (skipCache = false) => {
+    async (opts?: { skipCache?: boolean }) => {
+      const skipCache = opts?.skipCache ?? false;
       if (!skipCache) {
-        const cached = getCache<Product[]>(CACHE_KEY, 60_000);
-        if (cached) {
-          setProducts(cached);
+        const cached = getCache<{
+          products: Product[];
+          total: number;
+          totalPages: number;
+          page: number;
+        }>(`${CACHE_KEY}_p${page}`, 30_000);
+        if (cached && cached.page === page) {
+          setProducts(cached.products);
+          setTotal(cached.total);
+          setTotalPages(cached.totalPages);
           setLoading(false);
           api
-            .get('/admin/products', { timeout: 25000 })
+            .get('/admin/products', {
+              params: { page, limit: PAGE_LIMIT },
+              timeout: 25000,
+            })
             .then((res) => {
               if (res.data?.success) {
                 const normalized = normalizeProducts(res.data.products || []);
+                const t = res.data.total ?? 0;
+                const tp = res.data.totalPages ?? 1;
                 setProducts(normalized);
-                setCache(CACHE_KEY, normalized);
+                setTotal(t);
+                setTotalPages(tp);
+                setCache(`${CACHE_KEY}_p${page}`, {
+                  products: normalized,
+                  total: t,
+                  totalPages: tp,
+                  page,
+                });
               }
             })
             .catch(() => {});
@@ -254,7 +287,11 @@ export default function AdminProductsPage() {
       }
 
       try {
-        const response = await api.get('/admin/products', { timeout: 25000 });
+        setLoading(true);
+        const response = await api.get('/admin/products', {
+          params: { page, limit: PAGE_LIMIT },
+          timeout: 25000,
+        });
         if (!response.data?.success) {
           toast({
             title: 'Алдаа',
@@ -264,8 +301,21 @@ export default function AdminProductsPage() {
           return;
         }
         const normalized = normalizeProducts(response.data.products || []);
+        const t = response.data.total ?? 0;
+        const tp = response.data.totalPages ?? 1;
+        if (normalized.length === 0 && page > 1 && t > 0) {
+          setPage((p) => Math.max(1, p - 1));
+          return;
+        }
         setProducts(normalized);
-        setCache(CACHE_KEY, normalized);
+        setTotal(t);
+        setTotalPages(tp);
+        setCache(`${CACHE_KEY}_p${page}`, {
+          products: normalized,
+          total: t,
+          totalPages: tp,
+          page,
+        });
       } catch (error: any) {
         console.error('Error fetching products:', error);
         if (await handleAdminAuthError(error)) {
@@ -281,45 +331,58 @@ export default function AdminProductsPage() {
         setLoading(false);
       }
     },
-    [toast, handleAdminAuthError]
+    [page, toast, handleAdminAuthError]
   );
 
   useEffect(() => {
-    if (isAdmin && !isChecking) {
-      fetchProducts();
-    }
-  }, [isAdmin, isChecking, fetchProducts]);
+    if (!isAdmin || isChecking) return;
+    api
+      .get('/admin/categories')
+      .then((res) => {
+        if (res.data?.success) {
+          setCategoriesForFilter(res.data.categories || []);
+        }
+      })
+      .catch(() => {});
+  }, [isAdmin, isChecking]);
 
-  const handleEdit = (product: Product) => {
-    const openEditModal = async () => {
-      try {
-        const response = await api.get(`/products/${product._id}`);
-        const fullProduct = response.data?.product;
-        if (!response.data?.success || !fullProduct) {
-          toast({
-            title: 'Алдаа',
-            description:
-              response.data?.message || 'Барааны дэлгэрэнгүй мэдээлэл авахад алдаа гарлаа',
-            variant: 'destructive',
-          });
-          return;
-        }
-        setEditingProduct(fullProduct);
-        setModalOpen(true);
-      } catch (error: any) {
-        if (await handleAdminAuthError(error)) {
-          return;
-        }
+  useEffect(() => {
+    if (isAdmin && !isChecking) {
+      void fetchProducts();
+    }
+  }, [isAdmin, isChecking, page, fetchProducts]);
+
+  const handleEdit = async (product: Product, triggerEl?: HTMLElement | null) => {
+    productModalTriggerRef.current = triggerEl ?? null;
+    setEditLoading(true);
+    try {
+      const response = await api.get(`/products/${product._id}`);
+      const fullProduct = response.data?.product;
+      if (!response.data?.success || !fullProduct) {
         toast({
           title: 'Алдаа',
           description:
-            error.response?.data?.message ||
-            'Барааны дэлгэрэнгүй мэдээлэл авахад алдаа гарлаа',
+            response.data?.message || 'Барааны дэлгэрэнгүй мэдээлэл авахад алдаа гарлаа',
           variant: 'destructive',
         });
+        return;
       }
-    };
-    openEditModal();
+      setEditingProduct(fullProduct);
+      setModalOpen(true);
+    } catch (error: any) {
+      if (await handleAdminAuthError(error)) {
+        return;
+      }
+      toast({
+        title: 'Алдаа',
+        description:
+          error.response?.data?.message ||
+          'Барааны дэлгэрэнгүй мэдээлэл авахад алдаа гарлаа',
+        variant: 'destructive',
+      });
+    } finally {
+      setEditLoading(false);
+    }
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -331,8 +394,8 @@ export default function AdminProductsPage() {
         title: 'Амжилттай',
         description: `"${name}" бараа устгагдлаа`,
       });
-      clearCache(CACHE_KEY);
-      void fetchProducts(true);
+      clearCache(`${CACHE_KEY}_p${page}`);
+      void fetchProducts({ skipCache: true });
     } catch (error: any) {
       console.error('Error deleting product:', error);
       if (await handleAdminAuthError(error)) {
@@ -356,17 +419,28 @@ export default function AdminProductsPage() {
 
   const pillActive = 'border border-[#111] bg-[#111] text-white';
   const pillInactive = 'border border-[#e4e4e4] bg-white text-[#111]';
+  const paginationBtn =
+    'h-8 min-w-[100px] rounded-[7px] border border-[#e4e4e4] bg-white px-3 text-[11px] text-[#111] disabled:cursor-not-allowed disabled:opacity-40';
 
   return (
     <div className="min-h-screen bg-white">
       <Header />
       <div className="sticky top-0 z-10 border-b border-[#efefef] bg-white px-[10px] pb-2 pt-3">
-        <h1 className="text-[16px] font-medium leading-tight text-[#111]">
-          Барааны удирдлага
-        </h1>
-        <p className="mt-0.5 text-[11px] leading-snug text-[#888]">
-          Дэлгүүрийн бүх барааг удирдах
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-[16px] font-medium leading-tight text-[#111]">
+              Барааны удирдлага
+            </h1>
+            <p className="mt-0.5 text-[11px] leading-snug text-[#888]">
+              Дэлгүүрийн бүх барааг удирдах
+            </p>
+          </div>
+          {!loading && (
+            <span className="shrink-0 rounded-[20px] border border-[#e8e8e8] bg-[#f5f5f5] px-2 py-0.5 text-[11px] leading-none text-[#111]">
+              {total} бараа
+            </span>
+          )}
+        </div>
 
         <div className="mt-2.5 flex items-center gap-[7px]">
           <div className="relative min-w-0 flex-1">
@@ -391,7 +465,8 @@ export default function AdminProductsPage() {
           </div>
           <button
             type="button"
-            onClick={() => {
+            onClick={(e) => {
+              productModalTriggerRef.current = e.currentTarget;
               setEditingProduct(null);
               setModalOpen(true);
             }}
@@ -475,6 +550,7 @@ export default function AdminProductsPage() {
             Илэрцтэй бараа олдсонгүй
           </p>
         ) : (
+          <>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4 md:gap-6">
             {categoryFilteredProducts.map((product) => {
               const mainImage =
@@ -526,7 +602,8 @@ export default function AdminProductsPage() {
                     <div className="mt-2 grid grid-cols-2 gap-[5px]">
                       <button
                         type="button"
-                        onClick={() => handleEdit(product)}
+                        disabled={editLoading}
+                        onClick={(e) => void handleEdit(product, e.currentTarget)}
                         className="flex h-7 items-center justify-center gap-1 rounded-[7px] border border-[#e4e4e4] bg-white text-[11px] text-[#444]"
                       >
                         <IconEdit className="h-[10px] w-[10px]" />
@@ -545,7 +622,31 @@ export default function AdminProductsPage() {
                 </div>
               );
             })}
-          </div>
+            </div>
+            {total > 0 ? (
+              <div className="mt-4 flex items-center justify-center gap-4">
+                <button
+                  type="button"
+                  className={paginationBtn}
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  ← Өмнөх
+                </button>
+                <span className="text-[12px] text-[#888]">
+                  {page} / {totalPages} хуудас
+                </span>
+                <button
+                  type="button"
+                  className={paginationBtn}
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Дараах →
+                </button>
+              </div>
+            ) : null}
+          </>
         )}
       </main>
 
@@ -553,9 +654,10 @@ export default function AdminProductsPage() {
         open={modalOpen}
         onOpenChange={setModalOpen}
         product={editingProduct}
+        returnFocusRef={productModalTriggerRef}
         onSuccess={() => {
-          clearCache(CACHE_KEY);
-          fetchProducts(true);
+          clearCache(`${CACHE_KEY}_p${page}`);
+          void fetchProducts({ skipCache: true });
         }}
       />
     </div>

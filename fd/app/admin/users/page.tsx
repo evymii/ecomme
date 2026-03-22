@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+const USERS_PAGE_LIMIT = 20;
 import Header from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import {
@@ -130,12 +132,16 @@ function IconTrash({ className }: { className?: string }) {
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const showLoader = useDelayedLoading(loading, 250);
   const { isAdmin, isChecking } = useAdminAuth();
   const { toast } = useToast();
 
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const passwordTriggerRef = useRef<HTMLElement | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -143,18 +149,36 @@ export default function AdminUsersPage() {
   const CACHE_KEY = 'admin_users';
 
   const fetchUsers = useCallback(
-    async (skipCache = false) => {
+    async (opts?: { skipCache?: boolean }) => {
+      const skipCache = opts?.skipCache ?? false;
       if (!skipCache) {
-        const cached = getCache<User[]>(CACHE_KEY, 60_000);
-        if (cached) {
-          setUsers(cached);
+        const cached = getCache<{
+          users: User[];
+          total: number;
+          totalPages: number;
+          page: number;
+        }>(`${CACHE_KEY}_p${page}`, 30_000);
+        if (cached && cached.page === page) {
+          setUsers(cached.users);
+          setTotal(cached.total);
+          setTotalPages(cached.totalPages);
           setLoading(false);
           api
-            .get('/admin/users')
+            .get('/admin/users', { params: { page, limit: USERS_PAGE_LIMIT } })
             .then((res) => {
               if (res.data?.success) {
-                setUsers(res.data.users || []);
-                setCache(CACHE_KEY, res.data.users || []);
+                const list = res.data.users || [];
+                const t = res.data.total ?? 0;
+                const tp = res.data.totalPages ?? 1;
+                setUsers(list);
+                setTotal(t);
+                setTotalPages(tp);
+                setCache(`${CACHE_KEY}_p${page}`, {
+                  users: list,
+                  total: t,
+                  totalPages: tp,
+                  page,
+                });
               }
             })
             .catch(() => {});
@@ -163,7 +187,10 @@ export default function AdminUsersPage() {
       }
 
       try {
-        const response = await api.get('/admin/users');
+        setLoading(true);
+        const response = await api.get('/admin/users', {
+          params: { page, limit: USERS_PAGE_LIMIT },
+        });
         if (!response.data?.success) {
           toast({
             title: 'Алдаа',
@@ -173,8 +200,21 @@ export default function AdminUsersPage() {
           return;
         }
         const data = response.data.users || [];
+        const t = response.data.total ?? 0;
+        const tp = response.data.totalPages ?? 1;
+        if (data.length === 0 && page > 1 && t > 0) {
+          setPage((p) => Math.max(1, p - 1));
+          return;
+        }
         setUsers(data);
-        setCache(CACHE_KEY, data);
+        setTotal(t);
+        setTotalPages(tp);
+        setCache(`${CACHE_KEY}_p${page}`, {
+          users: data,
+          total: t,
+          totalPages: tp,
+          page,
+        });
       } catch (error: any) {
         console.error('Error fetching users:', error);
         toast({
@@ -187,14 +227,14 @@ export default function AdminUsersPage() {
         setLoading(false);
       }
     },
-    [toast]
+    [page, toast]
   );
 
   useEffect(() => {
     if (isAdmin && !isChecking) {
-      fetchUsers();
+      void fetchUsers();
     }
-  }, [isAdmin, isChecking, fetchUsers]);
+  }, [isAdmin, isChecking, page, fetchUsers]);
 
   const handleRoleChange = async (
     userId: string,
@@ -209,11 +249,12 @@ export default function AdminUsersPage() {
 
     try {
       await api.put(`/admin/users/${userId}/role`, { role: newRole });
-      clearCache(CACHE_KEY);
+      clearCache(`${CACHE_KEY}_p${page}`);
       toast({
         title: 'Амжилттай',
         description: `Эрх "${newRole === 'admin' ? 'Админ' : 'Хэрэглэгч'}" болгож шинэчлэгдлээ`,
       });
+      void fetchUsers({ skipCache: true });
     } catch (error: any) {
       setUsers((prev) =>
         prev.map((u) =>
@@ -236,12 +277,12 @@ export default function AdminUsersPage() {
 
     try {
       await api.delete(`/admin/users/${user._id}`);
-      clearCache(CACHE_KEY);
-      setUsers((prev) => prev.filter((u) => u._id !== user._id));
+      clearCache(`${CACHE_KEY}_p${page}`);
       toast({
         title: 'Амжилттай',
         description: 'Хэрэглэгч устгагдлаа',
       });
+      void fetchUsers({ skipCache: true });
     } catch (error: any) {
       toast({
         title: 'Алдаа',
@@ -251,7 +292,8 @@ export default function AdminUsersPage() {
     }
   };
 
-  const openPasswordModal = (user: User) => {
+  const openPasswordModal = (user: User, trigger?: HTMLElement | null) => {
+    passwordTriggerRef.current = trigger ?? null;
     setSelectedUser(user);
     setNewPassword('');
     setPasswordModalOpen(true);
@@ -312,6 +354,9 @@ export default function AdminUsersPage() {
     return null;
   }
 
+  const paginationBtn =
+    'h-8 min-w-[100px] rounded-[7px] border border-[#e4e4e4] bg-white px-3 text-[11px] text-[#111] disabled:cursor-not-allowed disabled:opacity-40';
+
   return (
     <div className="min-h-screen bg-white">
       <Header />
@@ -326,7 +371,7 @@ export default function AdminUsersPage() {
             </p>
             {!loading && (
               <span className="shrink-0 rounded-[20px] border border-[#e8e8e8] bg-[#f5f5f5] px-2 py-0.5 text-[11px] leading-none text-[#111]">
-                {users.length} хэрэглэгч
+                {total} хэрэглэгч
               </span>
             )}
           </div>
@@ -387,12 +432,12 @@ export default function AdminUsersPage() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                    <button
-                      type="button"
-                      onClick={() => openPasswordModal(u)}
-                      title="Нууц үг солих"
-                      className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg border border-[#e0e0e0] bg-[#fafafa] transition-opacity hover:opacity-80"
-                    >
+                <button
+                  type="button"
+                  onClick={(e) => openPasswordModal(u, e.currentTarget)}
+                  title="Нууц үг солих"
+                  className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg border border-[#e0e0e0] bg-[#fafafa] transition-opacity hover:opacity-80"
+                >
                       <IconLock className="h-[14px] w-[14px]" />
                     </button>
                     <button
@@ -407,11 +452,45 @@ export default function AdminUsersPage() {
                 ))}
               </ul>
             )}
+            {!loading && total > 0 ? (
+              <div className="mt-4 flex items-center justify-center gap-4 pb-2">
+                <button
+                  type="button"
+                  className={paginationBtn}
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  ← Өмнөх
+                </button>
+                <span className="text-[12px] text-[#888]">
+                  {page} / {totalPages} хуудас
+                </span>
+                <button
+                  type="button"
+                  className={paginationBtn}
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Дараах →
+                </button>
+              </div>
+            ) : null}
           </div>
         )}
 
         <Dialog open={passwordModalOpen} onOpenChange={setPasswordModalOpen}>
-          <DialogContent className="max-w-sm border border-[#ececec] bg-white">
+          <DialogContent
+            className="max-w-sm border border-[#ececec] bg-white"
+            onOpenAutoFocus={(e) => {
+              e.preventDefault();
+              document.getElementById('newPassword')?.focus();
+            }}
+            onCloseAutoFocus={(e) => {
+              e.preventDefault();
+              passwordTriggerRef.current?.focus();
+              passwordTriggerRef.current = null;
+            }}
+          >
             <DialogHeader>
               <DialogTitle className="text-[#111]">Нууц үг солих</DialogTitle>
               <DialogDescription className="text-[#888]">

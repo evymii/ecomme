@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from 'react';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import { getImageUrl } from '@/lib/image-utils';
@@ -154,6 +162,9 @@ export default function AdminOrdersPage() {
   const selectAllRef = useRef<HTMLInputElement>(null);
   const dateFromInputRef = useRef<HTMLInputElement>(null);
   const dateToInputRef = useRef<HTMLInputElement>(null);
+  const sheetOverlayRef = useRef<HTMLDivElement>(null);
+  const sheetCloseBtnRef = useRef<HTMLButtonElement>(null);
+  const sheetTriggerRef = useRef<HTMLElement | null>(null);
 
   const getRequestErrorMessage = (error: any, fallback: string) => {
     const status = error?.response?.status;
@@ -188,11 +199,34 @@ export default function AdminOrdersPage() {
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const id = window.setTimeout(() => {
       setSearchFilter(searchInput.trim());
     }, 300);
-    return () => clearTimeout(timer);
+    return () => clearTimeout(id);
   }, [searchInput]);
+
+  useLayoutEffect(() => {
+    const el = sheetOverlayRef.current;
+    if (!el) return;
+    if (isDetailsOpen) {
+      el.removeAttribute('inert');
+    } else {
+      el.setAttribute('inert', '');
+    }
+  }, [isDetailsOpen]);
+
+  useEffect(() => {
+    if (!isDetailsOpen) return;
+    let cancelled = false;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) sheetCloseBtnRef.current?.focus();
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isDetailsOpen]);
 
   const displayedOrders = useMemo(() => {
     const query = searchInput.trim().replace(/\s+/g, '');
@@ -475,14 +509,28 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const openDetails = (order: Order) => {
+  const openDetails = (order: Order, triggerEl?: HTMLElement | null) => {
+    sheetTriggerRef.current = triggerEl ?? null;
     setSelectedOrder(order);
     setIsDetailsOpen(true);
     setShowReceipt(false);
   };
 
   const closeSheet = () => {
+    const trigger = sheetTriggerRef.current;
     setIsDetailsOpen(false);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (trigger && typeof trigger.focus === 'function') {
+          try {
+            trigger.focus();
+          } catch {
+            /* ignore focus errors from detached nodes */
+          }
+        }
+        sheetTriggerRef.current = null;
+      });
+    });
   };
 
   const getStatusLabel = (status: string) => {
@@ -770,7 +818,7 @@ export default function AdminOrdersPage() {
                     </select>
                     <button
                       type="button"
-                      onClick={() => openDetails(order)}
+                      onClick={(e) => openDetails(order, e.currentTarget)}
                       className="flex h-[26px] items-center gap-0.5 rounded-md border border-[#111] bg-white px-[9px] text-[10px] text-[#111]"
                     >
                       <IconInfo className="text-[#111]" />
@@ -785,11 +833,11 @@ export default function AdminOrdersPage() {
       </main>
 
       <div
+        ref={sheetOverlayRef}
         className={cn(
           'fixed inset-0 z-20 flex items-end justify-center transition-opacity duration-200',
           isDetailsOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
         )}
-        aria-hidden={!isDetailsOpen}
       >
         <button
           type="button"
@@ -818,6 +866,7 @@ export default function AdminOrdersPage() {
                   </p>
                 </div>
                 <button
+                  ref={sheetCloseBtnRef}
                   type="button"
                   onClick={closeSheet}
                   className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[#e8e8e8] bg-[#f7f7f7]"

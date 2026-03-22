@@ -240,7 +240,10 @@ export default function AdminCategoriesPage() {
     });
   };
 
-  const handleEdit = (category: Category) => {
+  const categoryModalTriggerRef = useRef<HTMLElement | null>(null);
+
+  const handleEdit = (category: Category, triggerEl?: HTMLElement | null) => {
+    categoryModalTriggerRef.current = triggerEl ?? null;
     setEditingCategory(category);
     setModalOpen(true);
   };
@@ -294,7 +297,8 @@ export default function AdminCategoriesPage() {
         </div>
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            categoryModalTriggerRef.current = e.currentTarget;
             setEditingCategory(null);
             setModalOpen(true);
           }}
@@ -366,7 +370,7 @@ export default function AdminCategoriesPage() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleEdit(parent);
+                          handleEdit(parent, e.currentTarget);
                         }}
                         className="flex h-[26px] w-[26px] items-center justify-center rounded-md border border-[#e8e8e8] bg-[#fafafa] text-[#444]"
                         aria-label="Засах"
@@ -442,7 +446,7 @@ export default function AdminCategoriesPage() {
                                 <div className="flex shrink-0 items-center gap-1.5">
                                   <button
                                     type="button"
-                                    onClick={() => handleEdit(child)}
+                                    onClick={(e) => handleEdit(child, e.currentTarget)}
                                     className="flex h-[26px] w-[26px] items-center justify-center rounded-md border border-[#e8e8e8] bg-[#fafafa] text-[#444]"
                                     aria-label="Засах"
                                   >
@@ -475,6 +479,7 @@ export default function AdminCategoriesPage() {
         open={modalOpen}
         onOpenChange={setModalOpen}
         category={editingCategory}
+        returnFocusRef={categoryModalTriggerRef}
         onSuccess={() => {
           clearCache(CACHE_KEY);
           fetchCategories(true);

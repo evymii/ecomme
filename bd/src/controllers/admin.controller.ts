@@ -87,15 +87,40 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<vo
 
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Optimize: use lean() for faster queries
-    const users = await User.find()
-      .select('-password')
-      .sort({ createdAt: -1 })
-      .lean();
-    
-    // No cache for admin data - must always be fresh
+    const rawPage = parseInt(String(req.query.page), 10);
+    const rawLimit = parseInt(String(req.query.limit), 10);
+    const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(100, rawLimit) : 20;
+    const skip = (page - 1) * limit;
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+
+    const filter: Record<string, unknown> = {};
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rx = new RegExp(escaped, 'i');
+      filter.$or = [{ name: rx }, { email: rx }, { phoneNumber: rx }];
+    }
+
+    const [total, users] = await Promise.all([
+      User.countDocuments(filter),
+      User.find(filter)
+        .select('-password')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
+
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.json({ success: true, users });
+    res.json({
+      success: true,
+      users,
+      total,
+      page,
+      totalPages,
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -194,16 +219,41 @@ export const changeUserPassword = async (req: Request, res: Response): Promise<v
 
 export const getAllProducts = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Return lightweight list data for admin grid; full product data is fetched on edit.
-    const products = await Product.find()
-      .select('code name description price category stock images features createdAt')
-      .slice('images', 1)
-      .sort({ createdAt: -1 })
-      .lean();
-    
-    // Set cache headers
+    const rawPage = parseInt(String(req.query.page), 10);
+    const rawLimit = parseInt(String(req.query.limit), 10);
+    const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(100, rawLimit) : 20;
+    const skip = (page - 1) * limit;
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+
+    const filter: Record<string, unknown> = {};
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rx = new RegExp(escaped, 'i');
+      filter.$or = [{ name: rx }, { code: rx }];
+    }
+
+    const [total, products] = await Promise.all([
+      Product.countDocuments(filter),
+      Product.find(filter)
+        .select('code name description price category stock images features createdAt')
+        .slice('images', 1)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
+
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
     res.setHeader('Cache-Control', 'private, max-age=30');
-    res.json({ success: true, products });
+    res.json({
+      success: true,
+      products,
+      total,
+      page,
+      totalPages,
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
