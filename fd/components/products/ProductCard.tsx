@@ -148,7 +148,7 @@ function ProductCard({ product, priority = false, categoryName }: ProductCardPro
       </div>
 
       {/* Product Info */}
-      <div className="p-3 md:p-4 flex flex-col flex-1 space-y-2 md:space-y-2.5">
+      <div className="p-3 md:p-4 flex flex-col flex-1 space-y-2.5 md:space-y-3">
         {/* Product Name */}
         <div className="flex-1 min-h-[2.5rem]">
           <h3 className="font-normal text-[#02111B] line-clamp-2 tracking-tight text-xs md:text-sm leading-tight" style={{ fontWeight: 400 }}>
@@ -156,35 +156,36 @@ function ProductCard({ product, priority = false, categoryName }: ProductCardPro
           </h3>
         </div>
 
-        {/* Stock Status */}
-        {product.stock !== undefined && (
-          <div className="flex items-center gap-1.5">
-            <div className={`h-1.5 md:h-2 w-1.5 md:w-2 rounded-full ${
-              isOutOfStock ? 'bg-red-500' : lowStock ? 'bg-orange-500' : 'bg-green-500'
-            }`}></div>
-            <span className={`text-[10px] md:text-xs font-light ${getStockColor()}`}>
-              {isOutOfStock
-                ? 'Дууссан'
-                : lowStock
-                ? `Сүүлчийн ${product.stock} ширхэг`
-                : `Нөөц: ${product.stock}`}
-            </span>
-          </div>
-        )}
+        {/* Price, Stock and Action */}
+        <div className="flex items-flex-start justify-between gap-2">
+          {/* Price */}
+          <span className="font-semibold text-[#02111B] tracking-tight text-sm md:text-base" style={{ fontWeight: 600 }}>
+            ₮{product.price.toLocaleString()}
+          </span>
 
-        {/* Price and Action */}
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <div className="flex-1">
-            <span className="font-semibold text-[#02111B] tracking-tight text-sm md:text-base block" style={{ fontWeight: 600 }}>
-              ₮{product.price.toLocaleString()}
-            </span>
+          {/* Stock Status + Arrow - Stacked on Right */}
+          <div className="flex flex-col items-end gap-0.5">
+            {product.stock !== undefined && (
+              <div className="flex items-center gap-1">
+                <div className={`h-1.5 md:h-2 w-1.5 md:w-2 rounded-full ${
+                  isOutOfStock ? 'bg-red-500' : lowStock ? 'bg-orange-500' : 'bg-green-500'
+                }`}></div>
+                <span className={`text-[9px] md:text-[10px] font-light ${getStockColor()}`}>
+                  {isOutOfStock
+                    ? 'Дууссан'
+                    : lowStock
+                    ? `${product.stock}`
+                    : `${product.stock}`}
+                </span>
+              </div>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleCardClick(); }}
+              className="text-[#5D737E] hover:text-[#02111B] transition-colors font-light hover:bg-[#5D737E]/5 rounded-full leading-none"
+            >
+              →
+            </button>
           </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); handleCardClick(); }}
-            className="text-[#5D737E] hover:text-[#02111B] transition-colors text-[9px] md:text-[11px] font-light px-2 py-1 rounded-full hover:bg-[#5D737E]/5"
-          >
-            →
-          </button>
         </div>
       </div>
     </div>
