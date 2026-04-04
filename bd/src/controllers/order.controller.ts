@@ -129,8 +129,14 @@ export const createOrder = async (req: Request | AuthRequest, res: Response): Pr
         savedOrder = await order.save({ session });
         break;
       } catch (saveError: any) {
+        console.error(`Order save attempt ${attempt + 1} failed:`, {
+          code: saveError?.code,
+          message: saveError?.message,
+          keyPattern: saveError?.keyPattern
+        });
         const isOrderCodeConflict = saveError?.code === 11000 && saveError?.keyPattern?.orderCode;
         if (isOrderCodeConflict && attempt < 2) {
+          console.log(`Order code conflict, retrying... (attempt ${attempt + 1}/3)`);
           continue;
         }
         throw saveError;

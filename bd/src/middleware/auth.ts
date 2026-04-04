@@ -97,7 +97,7 @@ export const authenticate = async (
       });
       // #endregion
       console.error('JWT_SECRET is not set in environment variables');
-      res.status(500).json({ success: false, message: 'Server configuration error' });
+      res.status(500).json({ success: false, message: 'Сервер тохиргооны алдаа' });
       return;
     }
 
