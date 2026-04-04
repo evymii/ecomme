@@ -430,7 +430,9 @@ export default function ProductModal({
                       'h-[34px] [&>span]:text-[12px] [&>span]:text-[#111]'
                     )}
                   >
-                    <SelectValue placeholder="Сонгох" />
+                    <SelectValue placeholder="Сонгох">
+                      {formData.category ? formData.category : 'Сонгох'}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent className="border border-[#e8e8e8] bg-white text-[#111]">
                     {categories
