@@ -74,3 +74,31 @@ export function PageLoader() {
     </div>
   );
 }
+
+/** Skeleton loader for table rows */
+export function TableRowSkeleton({ columns = 5 }: { columns?: number }) {
+  return (
+    <div className="flex h-12 items-center gap-3 rounded-lg border border-[#f0f0f0] bg-white px-4 py-3 mb-2">
+      {Array.from({ length: columns }).map((_, i) => (
+        <div
+          key={i}
+          className="h-4 bg-gradient-to-r from-[#f0f0f0] to-[#f8f8f8] rounded animate-pulse"
+          style={{
+            width: i === 0 ? '20%' : i === columns - 1 ? '15%' : '18%',
+            animationDelay: `${i * 0.1}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Skeleton loader for list items */
+export function ListItemSkeleton() {
+  return (
+    <div className="mb-2 rounded-lg border border-[#f0f0f0] bg-white p-3">
+      <div className="h-4 w-3/4 bg-gradient-to-r from-[#f0f0f0] to-[#f8f8f8] rounded animate-pulse mb-2" />
+      <div className="h-3 w-1/2 bg-gradient-to-r from-[#f0f0f0] to-[#f8f8f8] rounded animate-pulse" />
+    </div>
+  );
+}

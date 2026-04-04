@@ -25,7 +25,7 @@ import api from '@/lib/api';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useToast } from '@/hooks/use-toast';
 import Loader from '@/components/ui/Loader';
-import { PageLoader } from '@/components/ui/Loader';
+import { PageLoader, ListItemSkeleton } from '@/components/ui/Loader';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
 import { getCache, setCache, clearCache } from '@/lib/admin-cache';
 import { cn } from '@/lib/utils';
@@ -378,24 +378,37 @@ export default function AdminUsersPage() {
         </header>
 
         {loading && showLoader ? (
-          <PageLoader />
+          <div className="px-3 py-2.5 md:px-6 lg:px-8">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <ListItemSkeleton key={i} />
+            ))}
+          </div>
         ) : loading ? null : (
           <div className="px-3 py-2.5 md:px-6 lg:px-8">
             {users.length === 0 ? (
-              <p className="py-8 text-center text-[12px] text-[#888]">
-                Хэрэглэгч олдсонгүй
-              </p>
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="mb-3 text-5xl opacity-30">👥</div>
+                <p className="text-[15px] font-medium text-[#111] mb-1">Хэрэглэгч олдсонгүй</p>
+                <p className="text-[13px] text-[#888]">Одоохондоо системд хэрэглэгч бүртгүүлээгүй байна</p>
+              </div>
             ) : (
               <ul className="flex flex-col gap-1.5">
                 {users.map((u) => (
                   <li
                     key={u._id}
-                    className="flex h-14 min-h-[56px] flex-nowrap items-center gap-[10px] rounded-[10px] border border-[#ececec] bg-white px-3 py-2.5"
+                    className="flex h-14 min-h-[56px] flex-nowrap items-center gap-[10px] rounded-[10px] border border-[#ececec] bg-white px-3 py-2.5 transition-colors hover:bg-[#fafafa] md:hover:border-[#ddd] cursor-pointer"
                     title={
                       u.email
                         ? `${u.name || u.phoneNumber} — ${u.email}`
                         : undefined
                     }
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                      }
+                    }}
+                    role="row"
                   >
                     <div
                       className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-[#e8e8e8] bg-[#f5f5f5]"

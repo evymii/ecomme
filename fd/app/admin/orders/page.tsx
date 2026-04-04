@@ -13,7 +13,7 @@ import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import { getImageUrl } from '@/lib/image-utils';
 import Loader from '@/components/ui/Loader';
-import { PageLoader } from '@/components/ui/Loader';
+import { PageLoader, ListItemSkeleton } from '@/components/ui/Loader';
 import api from '@/lib/api';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -752,9 +752,17 @@ export default function AdminOrdersPage() {
           </div>
 
           {loading && showLoader ? (
-            <PageLoader />
+            <div className="px-2.5 md:px-6 lg:px-8 pt-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <ListItemSkeleton key={i} />
+              ))}
+            </div>
           ) : loading ? null : displayedOrders.length === 0 ? (
-            <div className="py-12 text-center text-[13px] text-[#888]">Захиалга олдсонгүй</div>
+            <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+              <div className="mb-3 text-5xl opacity-30">📋</div>
+              <p className="text-[15px] font-medium text-[#111] mb-1">Захиалга олдсонгүй</p>
+              <p className="text-[13px] text-[#888]">Шүүлтүүр дахин сонгоно уу эсвэл бүх захиалгыг харна уу</p>
+            </div>
           ) : (
             displayedOrders.map((order) => {
               const sel = selectedOrderIds.includes(order._id);
@@ -764,9 +772,18 @@ export default function AdminOrdersPage() {
                 <article
                   key={order._id}
                   className={cn(
-                    'mb-1.5 overflow-hidden rounded-[10px] border bg-white transition-colors',
+                    'mb-1.5 overflow-hidden rounded-[10px] border bg-white transition-colors cursor-pointer',
+                    'hover:bg-[#fafafa] md:hover:border-[#ddd]',
                     sel ? 'border-[#111]' : 'border-[#e8e8e8]'
                   )}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleSelectOrder(order._id);
+                    }
+                  }}
+                  role="row"
+                  tabIndex={0}
                 >
                   <div className="flex items-center gap-2 border-b border-[#f5f5f5] px-[11px] pb-[7px] pt-[9px]">
                     <input
