@@ -430,8 +430,8 @@ export default function ProductModal({
                       'h-[34px] [&>span]:text-[12px] [&>span]:text-[#111]'
                     )}
                   >
-                    {formData.category ? (
-                      <span className="text-[12px] text-[#111]">{formData.category}</span>
+                    {formData.category || product?.category ? (
+                      <span className="text-[12px] text-[#111]">{formData.category || product?.category}</span>
                     ) : (
                       <SelectValue placeholder="Сонгох" />
                     )}
