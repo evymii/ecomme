@@ -148,7 +148,7 @@ function ProductCard({ product, priority = false, categoryName }: ProductCardPro
       </div>
 
       {/* Product Info */}
-      <div className="p-3 md:p-4 flex flex-col flex-1 space-y-2.5 md:space-y-3">
+      <div className="p-2.5 md:p-3 flex flex-col flex-1 space-y-1.5 md:space-y-2">
         {/* Product Name */}
         <div className="flex-1 min-h-[2.5rem]">
           <h3 className="font-normal text-[#02111B] line-clamp-2 tracking-tight text-xs md:text-sm leading-tight" style={{ fontWeight: 400 }}>

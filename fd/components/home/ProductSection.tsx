@@ -44,7 +44,7 @@ export default function ProductSection({ title, products, link }: ProductSection
           Цааш үзэх →
         </Link>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
         {products.slice(0, 4).map((product) => (
           <ProductCard key={product._id} product={product} />
         ))}
