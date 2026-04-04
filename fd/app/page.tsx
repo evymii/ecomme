@@ -1,6 +1,7 @@
 import HomePageClient from '@/components/home/HomePageClient';
 
-export const revalidate = 60;
+// Staggered revalidation: featured/discounted products update frequently, categories less often
+export const revalidate = 60; // Main ISR interval for the page
 
 type HomeData = {
   featuredProducts: any[];
@@ -35,10 +36,10 @@ async function getHomeData(): Promise<HomeData> {
   const fetchLegacyHomeData = async (): Promise<HomeData> => {
     try {
       const [featuredRes, discountedRes, productsRes, categoriesRes] = await Promise.all([
-        fetch(`${apiBase}/products/featured`, { next: { revalidate: 60 } }),
-        fetch(`${apiBase}/products/discounted`, { next: { revalidate: 60 } }),
-        fetch(`${apiBase}/products?page=1&limit=16`, { next: { revalidate: 60 } }),
-        fetch(`${apiBase}/categories`, { next: { revalidate: 60 } }),
+        fetch(`${apiBase}/products/featured`, { next: { revalidate: 300 } }), // 5 min
+        fetch(`${apiBase}/products/discounted`, { next: { revalidate: 300 } }), // 5 min
+        fetch(`${apiBase}/products?page=1&limit=16`, { next: { revalidate: 60 } }), // 1 min
+        fetch(`${apiBase}/categories`, { next: { revalidate: 3600 } }), // 1 hour
       ]);
 
       const [featuredData, discountedData, productsData, categoriesData] = await Promise.all([
@@ -62,7 +63,7 @@ async function getHomeData(): Promise<HomeData> {
 
   try {
     const res = await fetch(`${apiBase}/public/home`, {
-      next: { revalidate: 60 },
+      next: { revalidate: 120 }, // 2 min - composite endpoint
     });
 
     if (!res.ok) return fetchLegacyHomeData();

@@ -15,6 +15,7 @@ import { getImageUrl } from '@/lib/image-utils';
 import { PageLoader } from '@/components/ui/Loader';
 import api from '@/lib/api';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
+import { TableRowSkeleton } from '@/components/ui/Loader';
 
 interface OrderProduct {
   _id: string;
@@ -99,7 +100,11 @@ export default function OrdersPage() {
             <h1 className="text-xl md:text-2xl font-semibold mb-4 md:mb-6">Миний захиалгууд</h1>
 
             {loading && showLoader ? (
-              <PageLoader />
+              <div className="space-y-4">
+                <TableRowSkeleton columns={4} />
+                <TableRowSkeleton columns={4} />
+                <TableRowSkeleton columns={4} />
+              </div>
             ) : loading ? null : orders.length === 0 ? (
               <Card>
                 <CardContent className="p-4 md:p-12">

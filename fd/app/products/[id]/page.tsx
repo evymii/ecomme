@@ -219,6 +219,7 @@ export default function ProductDetailPage() {
                       className="object-cover"
                       priority
                       sizes="(max-width: 768px) 80vw, (max-width: 1024px) 45vw, 40vw"
+                      placeholder="empty"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">

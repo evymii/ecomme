@@ -17,11 +17,20 @@ import { PageLoader } from '@/components/ui/Loader';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
 
 const cities = ['Улаанбаатар'];
-const districts: Record<string, string[]> = {
-  'Улаанбаатар': ['Сум/Дүүрэг сонгох'],
+
+// TODO: Load these from API if needed, for now use placeholders
+const getDistricts = (city: string): string[] => {
+  if (city === 'Улаанбаатар') {
+    return ['Сум/Дүүрэг сонгох'];
+  }
+  return ['Сум/Дүүрэг сонгох'];
 };
-const khoroo: Record<string, string[]> = {
-  'Сум/Дүүрэг сонгох': ['Баг/Хороо сонгох'],
+
+const getKhoroo = (district: string): string[] => {
+  if (district === 'Сум/Дүүрэг сонгох' || !district) {
+    return ['Баг/Хороо сонгох'];
+  }
+  return ['Баг/Хороо сонгох'];
 };
 
 export default function ProfilePage() {
@@ -35,6 +44,9 @@ export default function ProfilePage() {
     deliveryAddress: '',
     additionalInfo: '',
   });
+
+  // Track if districts and khoroo are loaded
+  const [districtsLoaded, setDistrictsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const showLoader = useDelayedLoading(loading, 250);
   const [saving, setSaving] = useState(false);
@@ -59,6 +71,25 @@ export default function ProfilePage() {
 
   const fetchProfile = async () => {
     try {
+      // Check if user data is already in auth store
+      const cachedUser = useAuthStore.getState().user;
+      if (cachedUser && cachedUser.name && cachedUser.address) {
+        // Use cached data from auth store
+        setFormData({
+          name: cachedUser.name || '',
+          phoneNumber: cachedUser.phoneNumber || '',
+          email: cachedUser.email || '',
+          city: cachedUser.address?.city || 'Улаанбаатар',
+          district: cachedUser.address?.district || '',
+          khoroo: cachedUser.address?.khoroo || '',
+          deliveryAddress: cachedUser.address?.deliveryAddress || '',
+          additionalInfo: cachedUser.address?.additionalInfo || '',
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Fetch fresh data from API if not cached
       const response = await api.get('/users/profile');
       if (response.data.success && response.data.user) {
         const userData = response.data.user;
@@ -71,7 +102,7 @@ export default function ProfilePage() {
           role: userData.role,
           address: userData.address
         });
-        
+
         setFormData({
           name: userData.name || '',
           phoneNumber: userData.phoneNumber || '',
@@ -159,20 +190,14 @@ export default function ProfilePage() {
                   <PageLoader />
                 ) : loading ? null : (
                   <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="lastName">Овог *</Label>
-                        <Input id="lastName" required />
-                      </div>
-                      <div>
-                        <Label htmlFor="firstName">Нэр *</Label>
-                        <Input
-                          id="firstName"
-                          value={formData.name}
-                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                          required
-                        />
-                      </div>
+                    <div>
+                      <Label htmlFor="name">Нэр *</Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        required
+                      />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -218,13 +243,13 @@ export default function ProfilePage() {
                         <Label htmlFor="district">Сум / Дүүрэг *</Label>
                         <Select
                           value={formData.district}
-                          onValueChange={(value) => setFormData({ ...formData, district: value })}
+                          onValueChange={(value) => setFormData({ ...formData, district: value, khoroo: '' })}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Сум/Дүүрэг сонгох" />
                           </SelectTrigger>
                           <SelectContent>
-                            {districts[formData.city]?.map((district) => (
+                            {getDistricts(formData.city).map((district) => (
                               <SelectItem key={district} value={district}>
                                 {district}
                               </SelectItem>
@@ -242,7 +267,7 @@ export default function ProfilePage() {
                             <SelectValue placeholder="Баг/Хороо сонгох" />
                           </SelectTrigger>
                           <SelectContent>
-                            {khoroo[formData.district]?.map((k) => (
+                            {getKhoroo(formData.district).map((k) => (
                               <SelectItem key={k} value={k}>
                                 {k}
                               </SelectItem>

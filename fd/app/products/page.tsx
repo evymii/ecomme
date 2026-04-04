@@ -31,7 +31,7 @@ interface Category {
   name: string;
 }
 
-const PAGE_LIMIT = 15;
+const PAGE_LIMIT = 20;
 
 function ProductsContent() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -40,6 +40,8 @@ function ProductsContent() {
   const [selectedMiniCategory, setSelectedMiniCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const showLoader = useDelayedLoading(loading, 250);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -113,7 +115,7 @@ function ProductsContent() {
     : null;
   const selectedCategoryQuery = selectedMiniCategory || selectedBigCategory;
 
-  // Fetch all pages when category changes (no load-more button)
+  // Fetch current page only when category or page changes
   useEffect(() => {
     let cancelled = false;
 
@@ -121,40 +123,25 @@ function ProductsContent() {
       try {
         setLoading(true);
 
-        const allProducts: Product[] = [];
-        let currentPage = 1;
-        let shouldContinue = true;
-        let serverTotal = 0;
+        const url = selectedCategoryQuery
+          ? `/products/category/${encodeURIComponent(selectedCategoryQuery)}?page=${page}&limit=${PAGE_LIMIT}`
+          : `/products?page=${page}&limit=${PAGE_LIMIT}`;
 
-        while (shouldContinue) {
-          const url = selectedCategoryQuery
-            ? `/products/category/${encodeURIComponent(selectedCategoryQuery)}?page=${currentPage}&limit=${PAGE_LIMIT}`
-            : `/products?page=${currentPage}&limit=${PAGE_LIMIT}`;
-
-          const response = await api.get(url);
-          const batch: Product[] = response.data.products || [];
-          const pagination = response.data.pagination;
-
-          allProducts.push(...batch);
-          serverTotal = pagination?.total || serverTotal;
-          shouldContinue = Boolean(pagination?.hasMore);
-          currentPage += 1;
-
-          // Safety break in case API returns broken pagination.
-          if (currentPage > 200) {
-            shouldContinue = false;
-          }
-        }
+        const response = await api.get(url);
+        const batch: Product[] = response.data.products || [];
+        const pagination = response.data.pagination;
 
         if (!cancelled) {
-          setProducts(allProducts);
-          setTotal(serverTotal || allProducts.length);
+          setProducts(batch);
+          setTotal(pagination?.total || 0);
+          setHasMore(Boolean(pagination?.hasMore));
         }
       } catch (error) {
         console.error('Error fetching products:', error);
         if (!cancelled) {
           setProducts([]);
           setTotal(0);
+          setHasMore(false);
         }
       } finally {
         if (!cancelled) {
@@ -167,11 +154,12 @@ function ProductsContent() {
     return () => {
       cancelled = true;
     };
-  }, [selectedCategoryQuery]);
+  }, [selectedCategoryQuery, page]);
 
   const handleBigCategoryClick = (bigCategory: string | null) => {
     setSelectedBigCategory(bigCategory);
     setSelectedMiniCategory(null);
+    setPage(1);
     if (bigCategory) {
       router.push(`/products?big=${encodeURIComponent(bigCategory)}`);
     } else {
@@ -181,6 +169,7 @@ function ProductsContent() {
 
   const handleMiniCategoryClick = (miniCategory: string | null) => {
     setSelectedMiniCategory(miniCategory);
+    setPage(1);
     if (!selectedBigCategory) return;
     if (miniCategory) {
       router.push(
@@ -215,13 +204,13 @@ function ProductsContent() {
           type="button"
           onClick={() => handleBigCategoryClick(null)}
           className={cn(
-            'flex h-[38px] w-[99px] shrink-0 items-center justify-center rounded-2xl border px-1.5 py-1 text-xs font-light tracking-wide transition-all duration-300 md:h-[56px] md:w-[148px] md:px-2 md:py-1.5 md:text-sm',
+            'flex h-[38px] px-3 md:h-[56px] md:px-4 shrink-0 items-center justify-center rounded-2xl border text-xs md:text-sm font-light tracking-wide transition-all duration-300 min-w-fit',
             selectedBigCategory === null
               ? 'bg-[#02111B] text-white shadow-lg scale-105 border-transparent'
               : 'bg-white text-[#5D737E] border-[#02111B]/10 hover:border-[#5D737E]/30'
           )}
         >
-          <span className="line-clamp-2 w-full text-center leading-tight [word-break:break-word]">
+          <span className="line-clamp-2 text-center leading-tight [word-break:break-word]">
             Бүгд
           </span>
         </button>
@@ -231,13 +220,13 @@ function ProductsContent() {
             key={entry.big}
             onClick={() => handleBigCategoryClick(entry.big)}
             className={cn(
-              'flex h-[38px] w-[99px] shrink-0 items-center justify-center rounded-2xl border px-1.5 py-1 text-xs font-light tracking-wide transition-all duration-300 md:h-[56px] md:w-[148px] md:px-2 md:py-1.5 md:text-sm',
+              'flex h-[38px] px-3 md:h-[56px] md:px-4 shrink-0 items-center justify-center rounded-2xl border text-xs md:text-sm font-light tracking-wide transition-all duration-300 min-w-fit',
               selectedBigCategory === entry.big
                 ? 'bg-[#02111B] text-white shadow-lg scale-105 border-transparent'
                 : 'bg-white text-[#5D737E] border-[#02111B]/10 hover:border-[#5D737E]/30'
             )}
           >
-            <span className="line-clamp-2 w-full text-center leading-tight [word-break:break-word]">{entry.big}</span>
+            <span className="line-clamp-2 text-center leading-tight [word-break:break-word]">{entry.big}</span>
           </button>
         ))}
       </div>
@@ -248,13 +237,13 @@ function ProductsContent() {
             type="button"
             onClick={() => handleMiniCategoryClick(null)}
             className={cn(
-              'flex h-[31px] w-[83px] shrink-0 items-center justify-center rounded-xl border px-1.5 py-0.5 text-[10px] font-light leading-tight transition-colors md:h-[46px] md:w-[124px] md:px-2 md:py-1 md:text-xs',
+              'flex h-[31px] px-2.5 md:h-[46px] md:px-3 shrink-0 items-center justify-center rounded-xl border text-[10px] md:text-xs font-light leading-tight transition-colors min-w-fit',
               selectedMiniCategory === null
                 ? 'bg-[#02111B] text-white border-[#02111B]'
                 : 'bg-white text-[#5D737E] border-[#02111B]/15 hover:border-[#5D737E]/30'
             )}
           >
-            <span className="line-clamp-2 w-full text-center leading-snug [word-break:break-word]">Бүгд</span>
+            <span className="line-clamp-2 text-center leading-snug [word-break:break-word]">Бүгд</span>
           </button>
           {selectedHierarchy.minis.map((mini) => (
             <button
@@ -262,13 +251,13 @@ function ProductsContent() {
               key={mini.fullName}
               onClick={() => handleMiniCategoryClick(mini.fullName)}
               className={cn(
-                'flex h-[31px] w-[83px] shrink-0 items-center justify-center rounded-xl border px-1.5 py-0.5 text-[10px] font-light leading-tight transition-colors md:h-[46px] md:w-[124px] md:px-2 md:py-1 md:text-xs',
+                'flex h-[31px] px-2.5 md:h-[46px] md:px-3 shrink-0 items-center justify-center rounded-xl border text-[10px] md:text-xs font-light leading-tight transition-colors min-w-fit',
                 selectedMiniCategory === mini.fullName
                   ? 'bg-[#02111B] text-white border-[#02111B]'
                   : 'bg-white text-[#5D737E] border-[#02111B]/15 hover:border-[#5D737E]/30'
               )}
             >
-              <span className="line-clamp-2 w-full text-center leading-snug [word-break:break-word]">{mini.label}</span>
+              <span className="line-clamp-2 text-center leading-snug [word-break:break-word]">{mini.label}</span>
             </button>
           ))}
         </div>
@@ -282,11 +271,34 @@ function ProductsContent() {
           <p className="text-[#5D737E] font-light">Бараа олдсонгүй</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
-          {products.map((product, index) => (
-            <ProductCard key={product._id} product={product} priority={index < 4} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
+            {products.map((product, index) => (
+              <ProductCard key={product._id} product={product} priority={index < 4} />
+            ))}
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="mt-8 md:mt-12 flex items-center justify-center gap-4">
+            <button
+              onClick={() => setPage(Math.max(1, page - 1))}
+              disabled={page <= 1}
+              className="px-4 py-2 text-sm border border-[#02111B]/20 text-[#02111B] rounded-full hover:border-[#5D737E]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-light"
+            >
+              ← Өмнөх
+            </button>
+            <span className="text-sm text-[#5D737E] font-light">
+              {page} хуудас
+            </span>
+            <button
+              onClick={() => setPage(page + 1)}
+              disabled={!hasMore}
+              className="px-4 py-2 text-sm border border-[#02111B]/20 text-[#02111B] rounded-full hover:border-[#5D737E]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-light"
+            >
+              Дараах →
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

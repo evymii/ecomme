@@ -64,6 +64,7 @@ function ProductCard({ product, priority = false, categoryName }: ProductCardPro
   }, [router, product._id]);
 
   const isOutOfStock = product.stock !== undefined && product.stock === 0;
+  const lowStock = product.stock !== undefined && product.stock > 0 && product.stock <= 3;
 
   // Determine badge text
   const getBadge = () => {
@@ -76,22 +77,27 @@ function ProductCard({ product, priority = false, categoryName }: ProductCardPro
 
   const badge = getBadge();
 
+  // Get stock status color
+  const getStockColor = () => {
+    if (isOutOfStock) return 'text-red-500';
+    if (lowStock) return 'text-orange-500';
+    return 'text-[#5D737E]';
+  };
+
   return (
     <div
-      className="group relative bg-white rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-xl border border-[#02111B]/5 cursor-pointer flex flex-col h-full"
+      className="group relative bg-white rounded-[20px] overflow-hidden transition-all duration-300 hover:shadow-2xl border border-[#02111B]/8 cursor-pointer flex flex-col h-full hover:border-[#02111B]/15"
       onClick={handleCardClick}
     >
       {/* Image Container */}
-      <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-[#5D737E]/5 to-transparent flex-shrink-0">
+      <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-[#5D737E]/8 to-[#02111B]/2 flex-shrink-0">
         {mainImage ? (
           <Image
             src={getImageUrl(mainImage.url)}
             alt={product.name}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"
-            unoptimized
             priority={priority}
-            loading={priority ? 'eager' : 'lazy'}
             sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
           />
         ) : (
@@ -142,21 +148,42 @@ function ProductCard({ product, priority = false, categoryName }: ProductCardPro
       </div>
 
       {/* Product Info */}
-      <div className="p-3 md:p-4 flex flex-col flex-1">
-        <div className="flex-1">
-          <h3 className="font-normal text-[#02111B] mb-1.5 md:mb-2 line-clamp-2 tracking-tight text-xs md:text-sm leading-snug" style={{ fontWeight: 400 }}>
+      <div className="p-3 md:p-4 flex flex-col flex-1 space-y-2 md:space-y-2.5">
+        {/* Product Name */}
+        <div className="flex-1 min-h-[2.5rem]">
+          <h3 className="font-normal text-[#02111B] line-clamp-2 tracking-tight text-xs md:text-sm leading-tight" style={{ fontWeight: 400 }}>
             {product.name}
           </h3>
         </div>
-        <div className="flex items-center justify-between mt-auto">
-          <span className="font-semibold text-[#02111B] tracking-tight text-sm md:text-base" style={{ fontWeight: 600 }}>
-            ₮{product.price.toLocaleString()}
-          </span>
+
+        {/* Stock Status */}
+        {product.stock !== undefined && (
+          <div className="flex items-center gap-1.5">
+            <div className={`h-1.5 md:h-2 w-1.5 md:w-2 rounded-full ${
+              isOutOfStock ? 'bg-red-500' : lowStock ? 'bg-orange-500' : 'bg-green-500'
+            }`}></div>
+            <span className={`text-[10px] md:text-xs font-light ${getStockColor()}`}>
+              {isOutOfStock
+                ? 'Дууссан'
+                : lowStock
+                ? `Сүүлчийн ${product.stock} ширхэг`
+                : `Нөөц: ${product.stock}`}
+            </span>
+          </div>
+        )}
+
+        {/* Price and Action */}
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <div className="flex-1">
+            <span className="font-semibold text-[#02111B] tracking-tight text-sm md:text-base block" style={{ fontWeight: 600 }}>
+              ₮{product.price.toLocaleString()}
+            </span>
+          </div>
           <button
             onClick={(e) => { e.stopPropagation(); handleCardClick(); }}
-            className="text-[#5D737E] hover:text-[#02111B] transition-colors text-[10px] md:text-xs font-light hidden md:block"
+            className="text-[#5D737E] hover:text-[#02111B] transition-colors text-[9px] md:text-[11px] font-light px-2 py-1 rounded-full hover:bg-[#5D737E]/5"
           >
-            Дэлгэрэнгүй
+            →
           </button>
         </div>
       </div>

@@ -98,6 +98,8 @@ export default function Header() {
   }, []); // Only run once on mount
 
   // Debounced search with abort controller to prevent race conditions
+  // Limit search results to 8 items for better UX
+  const MAX_SEARCH_RESULTS = 8;
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
@@ -113,13 +115,13 @@ export default function Header() {
     const timer = setTimeout(async () => {
       try {
         const response = await api.get(
-          `/products/search?q=${encodeURIComponent(searchQuery)}`,
+          `/products/search?q=${encodeURIComponent(searchQuery)}&limit=${MAX_SEARCH_RESULTS}`,
           {
             signal: abortController.signal,
           },
         );
         if (!abortController.signal.aborted) {
-          setSearchResults(response.data.products || []);
+          setSearchResults((response.data.products || []).slice(0, MAX_SEARCH_RESULTS));
           setSearchError(false);
         }
       } catch (error: any) {
@@ -186,6 +188,11 @@ export default function Header() {
     });
   };
 
+  const handleSeeAllResults = () => {
+    setSearchFocused(false);
+    router.push(`/products?q=${encodeURIComponent(searchQuery)}`);
+  };
+
   const searchDropdownContent = showDropdown ? (
     <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-[#02111B]/10 max-h-[70vh] overflow-y-auto z-50">
       {searchLoading ? (
@@ -197,51 +204,62 @@ export default function Header() {
           Хайлт хийхэд алдаа гарлаа. Дахин оролдоно уу.
         </div>
       ) : searchResults.length > 0 ? (
-        <div className="divide-y divide-[#02111B]/5 py-1">
-          {searchResults.map((product) => {
-            const mainImage =
-              product.images.find((img) => img.isMain) || product.images[0];
-            return (
-              <button
-                key={product._id}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  handleProductClick(product._id);
-                }}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#5D737E]/5 transition-colors text-left"
-              >
-                <div className="relative w-11 h-11 flex-shrink-0 bg-gradient-to-br from-[#5D737E]/10 to-transparent rounded-xl overflow-hidden">
-                  {mainImage ? (
-                    <Image
-                      src={getImageUrl(mainImage.url)}
-                      alt={product.name}
-                      fill
-                      className="object-cover"
-                      sizes="44px"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[#5D737E]/40 text-[10px]">
-                      No img
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-normal text-[#02111B] truncate tracking-tight">
-                    {product.name}
-                  </p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-[#5D737E] font-light">
-                      {product.code}
-                    </span>
-                    <span className="text-xs font-semibold text-[#02111B] tracking-tight">
-                      ₮{product.price.toLocaleString()}
-                    </span>
+        <>
+          <div className="divide-y divide-[#02111B]/5 py-1">
+            {searchResults.map((product) => {
+              const mainImage =
+                product.images.find((img) => img.isMain) || product.images[0];
+              return (
+                <button
+                  key={product._id}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleProductClick(product._id);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#5D737E]/5 transition-colors text-left"
+                >
+                  <div className="relative w-11 h-11 flex-shrink-0 bg-gradient-to-br from-[#5D737E]/10 to-transparent rounded-xl overflow-hidden">
+                    {mainImage ? (
+                      <Image
+                        src={getImageUrl(mainImage.url)}
+                        alt={product.name}
+                        fill
+                        className="object-cover"
+                        sizes="44px"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[#5D737E]/40 text-[10px]">
+                        No img
+                      </div>
+                    )}
                   </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-normal text-[#02111B] truncate tracking-tight">
+                      {product.name}
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-[#5D737E] font-light">
+                        {product.code}
+                      </span>
+                      <span className="text-xs font-semibold text-[#02111B] tracking-tight">
+                        ₮{product.price.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <button
+            onMouseDown={(e) => {
+              e.preventDefault();
+              handleSeeAllResults();
+            }}
+            className="w-full px-4 py-3 text-sm text-[#02111B] hover:bg-[#5D737E]/5 transition-colors text-center border-t border-[#02111B]/5 font-light"
+          >
+            Бүх илэрцийг үзэх →
+          </button>
+        </>
       ) : (
         <div className="p-5 text-center text-[#5D737E] text-sm font-light">
           Илэрц олдсонгүй
