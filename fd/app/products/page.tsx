@@ -199,7 +199,7 @@ function ProductsContent() {
       </div>
 
       {/* Main Categories — single horizontal row, scroll */}
-      <div className="flex flex-nowrap gap-2.5 overflow-x-auto pb-4 mb-6 md:mb-8 scrollbar-hide min-w-0">
+      <div className="flex flex-nowrap gap-1.5 md:gap-2 overflow-x-auto pb-4 mb-6 md:mb-8 scrollbar-hide min-w-0">
         <button
           type="button"
           onClick={() => handleBigCategoryClick(null)}
@@ -232,7 +232,7 @@ function ProductsContent() {
       </div>
 
       {selectedHierarchy && selectedHierarchy.minis.length > 0 && (
-        <div className="flex flex-nowrap gap-2 overflow-x-auto pb-3 mb-6 -mt-4 md:-mt-5 scrollbar-hide min-w-0">
+        <div className="flex flex-nowrap gap-1 md:gap-1.5 overflow-x-auto pb-3 mb-6 -mt-4 md:-mt-5 scrollbar-hide min-w-0">
           <button
             type="button"
             onClick={() => handleMiniCategoryClick(null)}
