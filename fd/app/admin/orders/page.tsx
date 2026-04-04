@@ -617,8 +617,8 @@ export default function AdminOrdersPage() {
   return (
     <div className="min-h-screen bg-white">
       <Header />
-      <main className="mx-auto max-w-lg pb-8">
-        <header className="sticky top-0 z-10 border-b border-[#efefef] bg-white px-[14px] pb-[9px] pt-[11px]">
+      <main className="mx-auto max-w-lg md:max-w-6xl lg:max-w-7xl pb-8">
+        <header className="sticky top-0 z-10 border-b border-[#efefef] bg-white px-[14px] md:px-6 lg:px-8 pb-[9px] pt-[11px]">
           <h1 className="mb-[7px] text-[16px] font-medium leading-tight text-[#111]">Захиалга</h1>
           <div className="relative mb-[7px]">
             <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#bbb]">
@@ -722,7 +722,7 @@ export default function AdminOrdersPage() {
           </div>
         </header>
 
-        <div className="px-2.5 pt-[9px]">
+        <div className="px-2.5 md:px-6 lg:px-8 pt-[9px]">
           <p className="mb-[7px] text-[12px] text-[#888]">{displayedOrders.length} захиалга олдлоо</p>
 
           {selectedCount > 0 && (

@@ -360,8 +360,8 @@ export default function AdminUsersPage() {
   return (
     <div className="min-h-screen bg-white">
       <Header />
-      <main className="mx-auto max-w-4xl bg-white">
-        <header className="border-b border-[#f0f0f0] px-4 py-4">
+      <main className="mx-auto max-w-lg md:max-w-4xl lg:max-w-6xl bg-white">
+        <header className="border-b border-[#f0f0f0] px-4 md:px-6 lg:px-8 py-4">
           <h1 className="text-[17px] font-medium leading-tight text-[#111]">
             Хэрэглэгчдийн удирдлага
           </h1>
@@ -380,7 +380,7 @@ export default function AdminUsersPage() {
         {loading && showLoader ? (
           <PageLoader />
         ) : loading ? null : (
-          <div className="px-3 py-2.5 md:px-4">
+          <div className="px-3 py-2.5 md:px-6 lg:px-8">
             {users.length === 0 ? (
               <p className="py-8 text-center text-[12px] text-[#888]">
                 Хэрэглэгч олдсонгүй
