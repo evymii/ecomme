@@ -852,7 +852,7 @@ export default function AdminOrdersPage() {
       <div
         ref={sheetOverlayRef}
         className={cn(
-          'fixed inset-0 z-20 flex items-end justify-center transition-opacity duration-200 sm:items-center',
+          'fixed inset-0 z-50 flex items-end justify-center transition-opacity duration-200 sm:items-center',
           isDetailsOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
         )}
       >
