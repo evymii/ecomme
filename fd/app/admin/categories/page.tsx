@@ -7,7 +7,7 @@ import api from '@/lib/api';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useToast } from '@/hooks/use-toast';
 import Loader from '@/components/ui/Loader';
-import { PageLoader } from '@/components/ui/Loader';
+import { PageLoader, ListItemSkeleton } from '@/components/ui/Loader';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
 import { getCache, setCache, clearCache } from '@/lib/admin-cache';
 import { cn } from '@/lib/utils';
@@ -279,7 +279,7 @@ export default function AdminCategoriesPage() {
   return (
     <div className="min-h-screen bg-white">
       <Header />
-      <div className="sticky top-0 z-10 border-b border-[#efefef] bg-white px-[14px] pb-[11px] pt-[13px]">
+      <div className="sticky top-0 z-10 border-b border-[#efefef] bg-white px-[14px] md:px-6 lg:px-8 pb-[11px] pt-[13px]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-[16px] font-medium leading-tight text-[#111]">
@@ -309,11 +309,19 @@ export default function AdminCategoriesPage() {
         </button>
       </div>
 
-      <main className="bg-white px-[10px] py-2.5">
+      <main className="mx-auto max-w-lg md:max-w-6xl lg:max-w-7xl bg-white px-[10px] md:px-6 lg:px-8 py-2.5">
         {loading && showLoader ? (
-          <PageLoader />
+          <div className="pt-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <ListItemSkeleton key={i} />
+            ))}
+          </div>
         ) : loading ? null : categories.length === 0 ? (
-          <p className="py-10 text-center text-[12px] text-[#888]">Ангилал олдсонгүй</p>
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="mb-3 text-5xl opacity-30">📁</div>
+            <p className="text-[15px] font-medium text-[#111] mb-1">Ангилал олдсонгүй</p>
+            <p className="text-[13px] text-[#888]">Эхний ангилалтай эхлүүлэх</p>
+          </div>
         ) : (
           <ul className="flex flex-col gap-1.5">
             {rootCategories.map((parent) => {
