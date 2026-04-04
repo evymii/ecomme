@@ -148,23 +148,23 @@ function ProductCard({ product, priority = false, categoryName }: ProductCardPro
       </div>
 
       {/* Product Info */}
-      <div className="p-2.5 md:p-3 flex flex-col flex-1 space-y-1.5 md:space-y-2">
+      <div className="p-2 md:p-2.5 flex flex-col flex-1 space-y-1 md:space-y-1.5">
         {/* Product Name */}
-        <div className="flex-1 min-h-[2.5rem]">
-          <h3 className="font-normal text-[#02111B] line-clamp-2 tracking-tight text-xs md:text-sm leading-tight" style={{ fontWeight: 400 }}>
+        <div className="flex-1 min-h-[2rem]">
+          <h3 className="font-normal text-[#02111B] line-clamp-2 tracking-tight text-xs leading-snug" style={{ fontWeight: 400 }}>
             {product.name}
           </h3>
         </div>
 
         {/* Price, Stock and Action */}
-        <div className="flex items-flex-start justify-between gap-2">
+        <div className="flex items-flex-start justify-between gap-1.5">
           {/* Price */}
-          <span className="font-semibold text-[#02111B] tracking-tight text-sm md:text-base" style={{ fontWeight: 600 }}>
+          <span className="font-semibold text-[#02111B] tracking-tight text-xs md:text-sm" style={{ fontWeight: 600 }}>
             ₮{product.price.toLocaleString()}
           </span>
 
           {/* Stock Status + Arrow - Stacked on Right */}
-          <div className="flex flex-col items-end gap-0.5">
+          <div className="flex flex-col items-end gap-0.25">
             {product.stock !== undefined && (
               <div className="flex items-center gap-1">
                 <div className={`h-1.5 md:h-2 w-1.5 md:w-2 rounded-full ${
