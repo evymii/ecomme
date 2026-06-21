@@ -33,3 +33,21 @@ export function getImageUrl(url: string): string {
   const cleanUrl = url.startsWith('/') ? url : '/' + url;
   return `${backendUrl}${cleanUrl}`;
 }
+
+/**
+ * Return a small Cloudinary thumbnail URL for dense admin grids.
+ */
+export function getCloudinaryThumbnailUrl(
+  url: string,
+  dimensions: { width?: number; height?: number } = {}
+): string {
+  const imageUrl = getImageUrl(url);
+  if (!imageUrl.includes('res.cloudinary.com') || !imageUrl.includes('/upload/')) {
+    return imageUrl;
+  }
+
+  const width = dimensions.width ?? 256;
+  const height = dimensions.height ?? width;
+  const transformation = `f_auto,q_auto,c_fill,w_${width},h_${height}`;
+  return imageUrl.replace('/upload/', `/upload/${transformation}/`);
+}

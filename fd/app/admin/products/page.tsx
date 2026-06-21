@@ -8,7 +8,7 @@ import api from '@/lib/api';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
-import { getImageUrl } from '@/lib/image-utils';
+import { getCloudinaryThumbnailUrl } from '@/lib/image-utils';
 import Loader from '@/components/ui/Loader';
 import { PageLoader, ListItemSkeleton } from '@/components/ui/Loader';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
@@ -569,12 +569,14 @@ export default function AdminProductsPage() {
                   <div className="relative aspect-square w-full bg-[#f5f5f5]">
                     {mainImage ? (
                       <Image
-                        src={getImageUrl(mainImage.url)}
+                        src={getCloudinaryThumbnailUrl(mainImage.url, {
+                          width: 800,
+                          height: 800,
+                        })}
                         alt=""
                         fill
                         className="object-cover"
-                        unoptimized
-                        sizes="(max-width: 768px) 50vw, 33vw"
+                        sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 180px"
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center">
