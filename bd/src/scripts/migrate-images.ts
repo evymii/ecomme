@@ -1,11 +1,19 @@
 /**
- * Migration script: Upload base64 images to Cloudinary and update MongoDB
+ * Migration script: Upload legacy product images to Cloudinary and update MongoDB.
+ *
+ * Supports:
+ * - base64 data URLs
+ * - local /uploads/... paths when the files exist in bd/uploads
+ * - absolute backend /uploads/... URLs when they are publicly reachable
  *
  * Run: cd bd && npx tsx src/scripts/migrate-images.ts
  */
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import { v2 as cloudinary } from 'cloudinary';
+import { access } from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -20,8 +28,17 @@ if (!MONGODB_URI) {
   process.exit(1);
 }
 
-async function uploadBase64ToCloudinary(dataUrl: string): Promise<string> {
-  const result = await cloudinary.uploader.upload(dataUrl, {
+if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+  console.error('Cloudinary environment variables are not fully set');
+  process.exit(1);
+}
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const backendRoot = path.resolve(__dirname, '../..');
+
+async function uploadToCloudinary(source: string): Promise<string> {
+  const result = await cloudinary.uploader.upload(source, {
     folder: 'az-souvenir/products',
     format: 'webp',
     quality: 'auto',
@@ -31,6 +48,63 @@ async function uploadBase64ToCloudinary(dataUrl: string): Promise<string> {
 
 function isBase64Image(url: string): boolean {
   return url.startsWith('data:image/');
+}
+
+function isCloudinaryImage(url: string): boolean {
+  return url.includes('res.cloudinary.com');
+}
+
+function isUploadImage(url: string): boolean {
+  if (url.startsWith('/uploads/')) return true;
+
+  try {
+    const parsedUrl = new URL(url);
+    return parsedUrl.pathname.startsWith('/uploads/');
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function getUploadSource(url: string): Promise<string | null> {
+  if (url.startsWith('/uploads/')) {
+    const localPath = path.resolve(backendRoot, url.replace(/^\//, ''));
+    return (await fileExists(localPath)) ? localPath : null;
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    if (!parsedUrl.pathname.startsWith('/uploads/')) return null;
+
+    const localPath = path.resolve(backendRoot, parsedUrl.pathname.replace(/^\//, ''));
+    if (await fileExists(localPath)) return localPath;
+
+    return url;
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function migrateImageUrl(url: string): Promise<string | null> {
+  if (!url || isCloudinaryImage(url)) return null;
+  if (isBase64Image(url)) return uploadToCloudinary(url);
+
+  if (isUploadImage(url)) {
+    const source = await getUploadSource(url);
+    if (!source) return null;
+
+    return uploadToCloudinary(source);
+  }
+
+  return null;
 }
 
 async function migrate() {
@@ -46,49 +120,62 @@ async function migrate() {
   let migratedCount = 0;
   let imageCount = 0;
   let skippedCount = 0;
+  let failedCount = 0;
 
   for (const product of products) {
     const images = product.images || [];
-    const base64Images = images.filter((img: any) => isBase64Image(img.url));
+    const legacyImages = images.filter((img: any) => {
+      const url = typeof img?.url === 'string' ? img.url : '';
+      return !isCloudinaryImage(url) && (isBase64Image(url) || isUploadImage(url));
+    });
 
-    if (base64Images.length === 0) {
+    if (legacyImages.length === 0) {
       skippedCount++;
       continue;
     }
 
-    console.log(`[${product.code || product.name}] ${base64Images.length} base64 image(s) found`);
+    console.log(`[${product.code || product.name}] ${legacyImages.length} legacy image(s) found`);
 
     const updatedImages = [];
+    let hasChanges = false;
+
     for (const img of images) {
-      if (isBase64Image(img.url)) {
-        try {
-          const cloudinaryUrl = await uploadBase64ToCloudinary(img.url);
+      const url = typeof img?.url === 'string' ? img.url : '';
+
+      try {
+        const cloudinaryUrl = await migrateImageUrl(url);
+        if (cloudinaryUrl) {
           updatedImages.push({
             ...img,
             url: cloudinaryUrl,
           });
+          hasChanges = true;
           imageCount++;
-          console.log(`  -> Uploaded (${Math.round(img.url.length / 1024)}KB base64 -> Cloudinary)`);
-        } catch (err: any) {
-          console.error(`  -> FAILED: ${err.message}`);
-          updatedImages.push(img); // Keep original on failure
+          console.log(`  -> Uploaded ${url.slice(0, 80)} -> Cloudinary`);
+          continue;
         }
-      } else {
-        updatedImages.push(img); // Already a URL
+      } catch (err: any) {
+        failedCount++;
+        console.error(`  -> FAILED ${url.slice(0, 80)}: ${err.message}`);
       }
+
+      updatedImages.push(img);
     }
 
-    await Product.updateOne(
-      { _id: product._id },
-      { $set: { images: updatedImages } }
-    );
-    migratedCount++;
+    if (hasChanges) {
+      await Product.updateOne(
+        { _id: product._id },
+        { $set: { images: updatedImages } }
+      );
+      migratedCount++;
+    }
   }
 
   console.log('\n--- Migration Complete ---');
   console.log(`Products migrated: ${migratedCount}`);
   console.log(`Images uploaded: ${imageCount}`);
-  console.log(`Products skipped (no base64): ${skippedCount}`);
+  console.log(`Images failed: ${failedCount}`);
+  console.log(`Products skipped (no legacy images): ${skippedCount}`);
 
   await mongoose.disconnect();
   console.log('Disconnected from MongoDB');

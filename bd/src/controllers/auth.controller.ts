@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
 import User, { IUser } from '../models/User.model.js';
 import { AuthRequest } from '../middleware/auth.js';
 
@@ -46,9 +45,7 @@ const checkIfAuthenticated = async (req: Request): Promise<IUser | null> => {
 export const signUp = async (req: Request, res: Response): Promise<void> => {
   try {
     console.log('Signup request received:', {
-      body: req.body,
       hasPhoneNumber: !!req.body.phoneNumber,
-      hasEmail: !!req.body.email,
       hasName: !!req.body.name,
       hasPassword: !!req.body.password
     });
@@ -69,14 +66,13 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       console.log('Auth check failed (user not authenticated), proceeding with signup');
     }
 
-    const { email, name, password, emailVerified } = req.body;
+    const { email, name, password } = req.body;
     const rawPhone = req.body.phone ?? req.body.phoneNumber;
 
     // Validate all fields are provided and not empty
-    if (!rawPhone || !email || !name || !password) {
+    if (!rawPhone || !name || !password) {
       const missingFields = [];
       if (!rawPhone) missingFields.push('утасны дугаар');
-      if (!email) missingFields.push('имэйл');
       if (!name) missingFields.push('нэр');
       if (!password) missingFields.push('нууц үг');
       
@@ -89,7 +85,7 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Check for empty strings after trim
-    if (!String(rawPhone).trim() || !email.trim() || !name.trim() || !password.trim()) {
+    if (!String(rawPhone).trim() || !name.trim() || !password.trim()) {
       res.status(400).json({ 
         success: false, 
         message: 'Бүх талбарыг бөглөнө үү' 
@@ -99,22 +95,25 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
 
     // Normalize phone number and email (same as when saving)
     const cleanPhoneNumber = String(rawPhone).trim().replace(/\s|-/g, '');
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = typeof email === 'string' && email.trim()
+      ? email.trim().toLowerCase()
+      : undefined;
     const trimmedName = name.trim();
 
     console.log('Normalized values:', {
       cleanPhoneNumber,
-      normalizedEmail,
+      hasEmail: !!normalizedEmail,
       trimmedName,
       passwordLength: password.length
     });
 
-    // Validate email format (email will be verified, phone number is NOT verified)
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(normalizedEmail)) {
-      console.log('Invalid email format:', normalizedEmail);
-      res.status(400).json({ success: false, message: 'Хүчинтэй имэйл хаяг оруулна уу' });
-      return;
+    if (normalizedEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(normalizedEmail)) {
+        console.log('Invalid email format:', normalizedEmail);
+        res.status(400).json({ success: false, message: 'Хүчинтэй имэйл хаяг оруулна уу' });
+        return;
+      }
     }
 
     // Validate password: must be exactly 4 digits
@@ -132,14 +131,15 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Duplicate email (Clerk OTP already proved inbox access)
-    const existingEmail = await User.findOne({ email: normalizedEmail }).select('_id').lean();
-    if (existingEmail) {
-      res.status(409).json({
-        success: false,
-        message: 'Энэ имэйл бүртгэлтэй байна',
-      });
-      return;
+    if (normalizedEmail) {
+      const existingEmail = await User.findOne({ email: normalizedEmail }).select('_id').lean();
+      if (existingEmail) {
+        res.status(409).json({
+          success: false,
+          message: 'Энэ имэйл бүртгэлтэй байна',
+        });
+        return;
+      }
     }
 
     // Duplicate phone
@@ -155,30 +155,27 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const isFirstAdmin = normalizedEmail === 'n.munkhpurev@gmail.com' || normalizedEmail === 'admin@example.com';
     const user = new User({
       phoneNumber: cleanPhoneNumber,
-      email: normalizedEmail,
+      ...(normalizedEmail ? { email: normalizedEmail } : {}),
       name: trimmedName,
       password: hashedPassword,
-      role: isFirstAdmin ? 'admin' : 'user',
-      isEmailVerified: emailVerified === true,
-      emailVerificationToken: emailVerified === true ? undefined : crypto.randomBytes(32).toString('hex'),
+      role: 'user',
     });
 
     console.log('Creating user:', {
       phoneNumber: cleanPhoneNumber,
-      email: normalizedEmail,
+      hasEmail: !!normalizedEmail,
       name: trimmedName,
-      role: isFirstAdmin ? 'admin' : 'user'
+      role: 'user'
     });
 
     try {
       await user.save();
     } catch (saveError: any) {
-      // Handle old index errors (like clerkld) - but allow duplicates
+      // Handle stale auth-index errors from previous deployments.
       if (saveError.message?.includes('clerkld')) {
-        console.error('Database index error - old clerkld index detected. Please drop the index:', saveError);
+        console.error('Database index error - stale auth index detected. Please drop the index:', saveError);
         res.status(500).json({
           success: false,
           message: 'Бааз өгөгдлийн алдаа. Админтай холбогдоно уу.'
@@ -224,21 +221,6 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const checkEmail = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email } = req.body;
-    if (!email) {
-      res.json({ success: true, exists: false });
-      return;
-    }
-    const normalizedEmail = email.trim().toLowerCase();
-    const user = await User.findOne({ email: normalizedEmail }).select('_id').lean();
-    res.json({ success: true, exists: !!user });
-  } catch (error: any) {
-    res.json({ success: true, exists: false });
-  }
-};
-
 export const signIn = async (req: Request, res: Response): Promise<void> => {
   try {
     const rawPhone = req.body.phone ?? req.body.phoneNumber;
@@ -266,8 +248,8 @@ export const signIn = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Legacy rows may have non-bcrypt placeholders
-    if (user.password === 'clerk-managed' || !user.password) {
+    // Legacy rows may be missing a local password hash.
+    if (!user.password) {
       res.status(401).json({ success: false, message: 'Утасны дугаар эсвэл нууц үг буруу байна' });
       return;
     }

@@ -3,6 +3,8 @@ import compression from 'compression';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { connectDB, disconnectDB } from './config/database.js';
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
@@ -17,6 +19,9 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDirectory = path.resolve(__dirname, '../uploads');
 
 const allowedOrigins = [
   process.env.FRONTEND_URL, // e.g., https://www.az-souvenir.com
@@ -63,46 +68,23 @@ app.use(compression() as any);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve uploaded files with proper CORS headers (only in development/local)
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-  // Custom middleware for static files with CORS
-  app.use('/uploads', (req, res, next) => {
-    // Set CORS headers
-    const origin = req.headers.origin;
-    const allowedOrigins = [
-      process.env.FRONTEND_URL,
-      'http://localhost:3000',
-      'http://localhost:3001'
-    ].filter(Boolean);
-    
-    if (!origin || isTrustedOrigin(origin)) {
-      res.setHeader('Access-Control-Allow-Origin', origin || '*');
-    }
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    
-    // Cache headers for better performance
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    
-    next();
-  }, express.static('uploads', {
-    setHeaders: (res, path) => {
-      // Set proper content type
-      const ext = path.split('.').pop()?.toLowerCase();
-      const contentTypes: { [key: string]: string } = {
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'png': 'image/png',
-        'gif': 'image/gif',
-        'webp': 'image/webp'
-      };
-      if (ext && contentTypes[ext]) {
-        res.setHeader('Content-Type', contentTypes[ext]);
-      }
-    }
-  }));
-}
+app.use('/uploads', (req, res, next) => {
+  const origin = req.headers.origin;
+  if (!origin || isTrustedOrigin(origin) || process.env.NODE_ENV !== 'production') {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+
+  next();
+}, express.static(uploadsDirectory, {
+  dotfiles: 'deny',
+  fallthrough: true,
+  immutable: true,
+  maxAge: '1y',
+}));
 
 // Rate limiting for auth endpoints (prevent brute force)
 const authLimiter = rateLimit({

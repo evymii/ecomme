@@ -3,6 +3,8 @@ import compression from 'compression';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { connectDB } from '../src/config/database.js';
 import authRoutes from '../src/routes/auth.routes.js';
 import userRoutes from '../src/routes/user.routes.js';
@@ -16,6 +18,9 @@ import { errorHandler } from '../src/middleware/errorHandler.js';
 dotenv.config();
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDirectory = path.resolve(__dirname, '../uploads');
 
 // CORS configuration for Vercel
 const allowedOrigins = [
@@ -61,9 +66,7 @@ app.use(compression() as any);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve uploaded images with proper CORS headers (for development)
-app.get('/uploads/:folder/:filename', (req, res, next) => {
-  // Set CORS headers
+app.use('/uploads', (req, res, next) => {
   const origin = req.headers.origin;
   if (!origin || isTrustedOrigin(origin) || process.env.NODE_ENV !== 'production') {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
@@ -71,26 +74,15 @@ app.get('/uploads/:folder/:filename', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  
-  // Set proper content type based on file extension
-  const filename = req.params.filename;
-  const ext = filename.split('.').pop()?.toLowerCase();
-  const contentTypes: { [key: string]: string } = {
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'gif': 'image/gif',
-    'webp': 'image/webp'
-  };
-  if (ext && contentTypes[ext]) {
-    res.setHeader('Content-Type', contentTypes[ext]);
-  }
-  
-  // Cache headers for better performance
   res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-  
+
   next();
-});
+}, express.static(uploadsDirectory, {
+  dotfiles: 'deny',
+  fallthrough: true,
+  immutable: true,
+  maxAge: '4y',
+}));
 
 // Rate limiting for auth endpoints (prevent brute force)
 const authLimiter = rateLimit({

@@ -2,12 +2,10 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IUser extends Document {
   phoneNumber: string;
-  email: string;
+  email?: string;
   name: string;
-  password: string; // Hashed password or 'clerk-managed'
+  password: string;
   role: 'admin' | 'user';
-  isEmailVerified?: boolean; // Email verification status
-  emailVerificationToken?: string; // Token for email verification
   address?: {
     city: string;
     district: string;
@@ -28,7 +26,7 @@ const UserSchema = new Schema<IUser>(
     },
     email: {
       type: String,
-      required: true,
+      required: false,
       lowercase: true,
       trim: true
     },
@@ -46,13 +44,6 @@ const UserSchema = new Schema<IUser>(
       enum: ['admin', 'user'],
       default: 'user'
     },
-    isEmailVerified: {
-      type: Boolean,
-      default: false
-    },
-    emailVerificationToken: {
-      type: String
-    },
     address: {
       city: { type: String },
       district: { type: String },
@@ -66,8 +57,8 @@ const UserSchema = new Schema<IUser>(
   }
 );
 
-// Index for faster queries
-UserSchema.index({ phoneNumber: 1 });
-UserSchema.index({ email: 1 });
+// Phone is the local-auth login identifier; email is optional legacy/contact data.
+UserSchema.index({ phoneNumber: 1 }, { unique: true });
+UserSchema.index({ email: 1 }, { sparse: true });
 
 export default mongoose.model<IUser>('User', UserSchema);
