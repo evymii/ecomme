@@ -5,7 +5,6 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import AuthProvider from "@/components/providers/AuthProvider";
 import ScrollToTop from "@/components/providers/ScrollToTop";
-import ClerkWrapper from "@/components/providers/ClerkWrapper";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -56,16 +55,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkWrapper>
-      <html lang="mn">
-        <body className={inter.className}>
-          <AuthProvider>
-            <ScrollToTop />
-            {children}
-            <Toaster />
-          </AuthProvider>
-        </body>
-      </html>
-    </ClerkWrapper>
+    <html lang="mn">
+      <body className={inter.className}>
+        <AuthProvider>
+          <ScrollToTop />
+          {children}
+          <Toaster />
+        </AuthProvider>
+      </body>
+    </html>
   );
 }

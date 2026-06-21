@@ -21,16 +21,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     const initializeAuth = async () => {
       hasInitialized.current = true;
       
-      // Check if already initialized from persisted state
       const existingUser = useAuthStore.getState().user;
       const existingToken = useAuthStore.getState().token;
-      
-      // If user is already in store, don't re-fetch
-      if (existingUser && existingToken) {
-        return;
-      }
-      
-      let token = localStorage.getItem('token');
+
+      let token = existingToken || localStorage.getItem('token');
       // Cookie fallback — Safari ITP can clear localStorage
       if (!token) {
         const match = document.cookie.match(/(?:^|; )auth_token=([^;]*)/);
@@ -39,6 +33,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           localStorage.setItem('token', token); // Restore to localStorage
         }
       }
+
+      if (!token) {
+        if (existingUser) useAuthStore.getState().logout();
+        return;
+      }
+
+      if (existingToken && !localStorage.getItem('token')) {
+        localStorage.setItem('token', existingToken);
+      }
+
       if (token) {
         try {
           const response = await api.get('/users/profile');

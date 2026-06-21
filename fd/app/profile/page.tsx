@@ -210,11 +210,11 @@ export default function ProfilePage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="email">Имэйл хаяг *</Label>
+                        <Label htmlFor="email">Имэйл хаяг</Label>
                         <Input
                           id="email"
-                          type="email"
-                          value={formData.email}
+                          type="text"
+                          value={formData.email || 'Бүртгээгүй'}
                           disabled
                         />
                       </div>

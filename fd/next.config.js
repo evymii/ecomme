@@ -1,4 +1,23 @@
 /** @type {import('next').NextConfig} */
+function getApiUploadRemotePattern() {
+  const rawApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim()
+  if (!rawApiUrl) return null
+
+  try {
+    const apiUrl = new URL(rawApiUrl)
+    return {
+      protocol: apiUrl.protocol.replace(':', ''),
+      hostname: apiUrl.hostname,
+      port: apiUrl.port,
+      pathname: '/uploads/**',
+    }
+  } catch (_error) {
+    return null
+  }
+}
+
+const apiUploadRemotePattern = getApiUploadRemotePattern()
+
 const nextConfig = {
   images: {
     formats: ['image/avif', 'image/webp'],
@@ -15,6 +34,7 @@ const nextConfig = {
         port: '5001',
         pathname: '/uploads/**',
       },
+      ...(apiUploadRemotePattern ? [apiUploadRemotePattern] : []),
     ],
   },
   experimental: {

@@ -138,16 +138,6 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!formData.email || !formData.email.trim()) {
-      submittingRef.current = false;
-      toast({
-        title: 'Алдаа',
-        description: 'Имэйл хаяг оруулна уу',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     if (!formData.address || !formData.address.trim()) {
       submittingRef.current = false;
       toast({
@@ -173,7 +163,7 @@ export default function CheckoutPage() {
         },
         paymentMethod,
         phoneNumber: formData.phoneNumber.trim(),
-        email: formData.email.trim(),
+        ...(formData.email.trim() ? { email: formData.email.trim() } : {}),
         customerName: user?.name || undefined,
       };
 
@@ -442,7 +432,7 @@ export default function CheckoutPage() {
                   Захиалагчийн мэдээлэл
                 </h2>
                 <div className="space-y-4">
-                  {/* If logged in, show phone & email as read-only info */}
+                  {/* If logged in, show saved customer info as read-only. */}
                   {user && user.phoneNumber ? (
                     <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
                       <div className="flex items-center justify-between mb-1">
@@ -472,13 +462,12 @@ export default function CheckoutPage() {
                     </div>
                   ) : (
                     <div>
-                      <Label htmlFor="email" className="text-sm md:text-base">Имэйл хаяг *</Label>
+                      <Label htmlFor="email" className="text-sm md:text-base">Имэйл хаяг</Label>
                       <Input
                         id="email"
                         type="email"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        required
                         placeholder="example@gmail.com"
                         className="h-11 md:h-10 text-base md:text-sm"
                       />

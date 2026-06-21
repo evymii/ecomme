@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useSignUp } from '@clerk/nextjs';
 import {
   Dialog,
   DialogContent,
@@ -16,21 +15,6 @@ import { useAuthStore } from '@/store/auth-store';
 import api from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
-/** Log Clerk API errors (includes `.errors[]` with `longMessage`). */
-function logClerkError(context: string, err: unknown) {
-  const e = err as {
-    errors?: Array<{ code?: string; longMessage?: string; message?: string; meta?: unknown }>;
-    message?: string;
-  };
-  const payload = e?.errors ?? err;
-  console.error(`Clerk ${context}:`, JSON.stringify(payload, null, 2));
-  return (
-    e?.errors?.[0]?.longMessage ??
-    e?.errors?.[0]?.message ??
-    (typeof e?.message === 'string' ? e.message : null)
-  );
-}
-
 interface AuthModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -41,14 +25,9 @@ interface AuthModalProps {
 export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthModalProps) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  // OTP verification state
-  const [pendingVerification, setPendingVerification] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
 
   const { setUser, setToken, user } = useAuthStore();
   const { toast } = useToast();
@@ -65,17 +44,11 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
       return false;
     }
   };
-  
-  // Clerk: email OTP only — no setActive, no Clerk session as source of truth.
-  const { isLoaded: signUpLoaded, signUp: clerkSignUp } = useSignUp();
 
   const resetForm = () => {
     setPhoneNumber('');
-    setEmail('');
     setName('');
     setPassword('');
-    setOtpCode('');
-    setPendingVerification(false);
   };
 
   const handleDialogOpenChange = (isOpen: boolean) => {
@@ -94,32 +67,7 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
     requestAnimationFrame(() => returnFocusRef?.current?.focus());
   };
 
-  /** After Clerk OTP = complete — persist user + JWT from our API only. */
-  const createBackendUser = async () => {
-    const response = await api.post('/auth/signup', {
-      name: name.trim(),
-      email: email.trim(),
-      phone: phoneNumber.trim(),
-      password,
-      emailVerified: true,
-    });
-
-    if (response.data.success && response.data.token) {
-      const token = response.data.token as string;
-      setToken(token);
-      localStorage.setItem('token', token);
-      setUser({
-        ...response.data.user,
-        id: response.data.user.id || response.data.user._id,
-      });
-      toast({ title: 'Бүртгэл амжилттай!' });
-      finishAuthAndClose();
-      return;
-    }
-    throw new Error(response.data?.message || 'Backend бүртгэлд алдаа гарлаа');
-  };
-
-  // ========== SIGN UP (Step 1: Verify email via Clerk) ==========
+  // ========== SIGN UP (directly to our backend) ==========
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -128,12 +76,7 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
       return;
     }
 
-    if (!signUpLoaded || !clerkSignUp) {
-      toast({ title: 'Алдаа', description: 'Clerk ачаалагдаагүй байна. Хуудсыг дахин ачаалаарай.', variant: 'destructive' });
-      return;
-    }
-
-    if (!name.trim() || !email.trim() || !phoneNumber.trim() || !password.trim()) {
+    if (!name.trim() || !phoneNumber.trim() || !password.trim()) {
       toast({ title: 'Алдаа', description: 'Бүх талбарыг бөглөнө үү', variant: 'destructive' });
       return;
     }
@@ -145,164 +88,77 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
 
     setLoading(true);
     try {
-      try {
-        // Clerk: email ONLY — no firstName, password, phone, username (see Clerk Dashboard: email required, rest off).
-        await clerkSignUp.create({
-          emailAddress: email.trim(),
-        });
-
-        // Send OTP to email (email_code, not link)
-        try {
-          await clerkSignUp.prepareEmailAddressVerification({
-            strategy: 'email_code',
-          });
-        } catch (prepErr: unknown) {
-          const msg = logClerkError('prepareEmailAddressVerification', prepErr);
-          toast({
-            title: 'Алдаа',
-            description: msg ?? 'Код илгээхэд алдаа гарлаа. Clerk тохиргоо (email_code, Development vs Production) шалгана уу.',
-            variant: 'destructive',
-          });
-          return;
-        }
-
-        setPendingVerification(true);
+      const isWarm = await warmUpBackend();
+      if (!isWarm) {
         toast({
-          title: 'Код илгээлээ',
-          description: `${email} хаяг руу баталгаажуулах код илгээлээ. Имэйлээ шалгана уу.`,
-          duration: 6000,
+          title: 'Анхааруулга',
+          description: 'Сервер сэрж байна. Бүртгэлийг дахин оролдож байна...',
         });
-      } catch (clerkError: unknown) {
-        logClerkError('signUp flow', clerkError);
-        const clerkErr = clerkError as {
-          errors?: Array<{ code?: string; longMessage?: string; message?: string }>;
-        };
-        const errorCode = clerkErr.errors?.[0]?.code || '';
-        const errorMsg =
-          clerkErr.errors?.[0]?.longMessage || clerkErr.errors?.[0]?.message || '';
+      }
 
-        if (errorCode === 'form_identifier_exists' || errorMsg.includes('already') || errorMsg.includes('taken')) {
-          toast({
-            title: 'Алдаа',
-            description:
-              'Энэ имэйлээр OTP илгээх боломжгүй (Clerk-д бүртгэлтэй). Нэвтрэх хэсгээр орно уу эсвэл өөр имэйл ашиглана уу.',
-            variant: 'destructive',
-          });
-        } else if (errorMsg.toLowerCase().includes('email')) {
-          toast({ title: 'Алдаа', description: 'Имэйл хаяг буруу байна', variant: 'destructive' });
+      const response = await api.post('/auth/signup', {
+        name: name.trim(),
+        phone: phoneNumber.trim(),
+        password,
+      }, { timeout: 20000 });
+
+      if (response.data.success && response.data.token) {
+        const token = response.data.token as string;
+        setToken(token);
+        localStorage.setItem('token', token);
+        setUser({
+          ...response.data.user,
+          id: response.data.user.id || response.data.user._id,
+        });
+        toast({ title: 'Бүртгэл амжилттай!' });
+        finishAuthAndClose();
+        return;
+      }
+
+      throw new Error(response.data?.message || 'Бүртгэл үүсгэхэд алдаа гарлаа');
+    } catch (firstError: any) {
+      try {
+        if (firstError.code === 'ECONNABORTED' || firstError.message?.includes('timeout')) {
+          await sleep(1500);
+          const retryResponse = await api.post('/auth/signup', {
+            name: name.trim(),
+            phone: phoneNumber.trim(),
+            password,
+          }, { timeout: 20000 });
+
+          if (retryResponse.data.success && retryResponse.data.token) {
+            const token = retryResponse.data.token as string;
+            setToken(token);
+            localStorage.setItem('token', token);
+            setUser({
+              ...retryResponse.data.user,
+              id: retryResponse.data.user.id || retryResponse.data.user._id,
+            });
+            toast({ title: 'Бүртгэл амжилттай!' });
+            finishAuthAndClose();
+            return;
+          }
+
+          throw new Error(retryResponse.data?.message || 'Бүртгэл үүсгэхэд алдаа гарлаа');
         } else {
-          toast({
-            title: 'Алдаа',
-            description: errorMsg || 'Бүртгэл үүсгэхэд алдаа гарлаа',
-            variant: 'destructive',
-          });
+          throw firstError;
         }
-      }
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
-      console.error('Sign up error:', error);
-      toast({ title: 'Алдаа', description: msg || 'Бүртгэл үүсгэхэд алдаа гарлаа', variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ========== SIGN UP (Step 2: Verify OTP → Create user in our backend) ==========
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!otpCode.trim()) {
-      toast({ title: 'Алдаа', description: 'Баталгаажуулах кодыг оруулна уу', variant: 'destructive' });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      if (!signUpLoaded || !clerkSignUp) {
-        toast({ title: 'Алдаа', description: 'Clerk ачаалагдаагүй байна', variant: 'destructive' });
-        return;
-      }
-
-      let result;
-      try {
-        result = await clerkSignUp.attemptEmailAddressVerification({
-          code: otpCode.trim(),
-        });
-      } catch (verifyErr: unknown) {
-        logClerkError('attemptEmailAddressVerification', verifyErr);
-        const err = verifyErr as {
-          errors?: Array<{ code?: string; longMessage?: string; message?: string }>;
-        };
-        let errorMessage = err.errors?.[0]?.longMessage ?? err.errors?.[0]?.message ?? 'Баталгаажуулахад алдаа гарлаа';
-        const code = err.errors?.[0]?.code || '';
-        const msg = (err.errors?.[0]?.longMessage || err.errors?.[0]?.message || '').toLowerCase();
-        if (code === 'form_code_incorrect' || msg.includes('incorrect') || msg.includes('invalid')) {
-          errorMessage = 'Баталгаажуулах код буруу байна';
-        } else if (msg.includes('expired')) {
-          errorMessage = 'Код хүчинтэй хугацаа дууссан. Дахин илгээнэ үү.';
-        }
+      } catch (error: any) {
+        console.error('Sign up error:', error);
+        const errorMessage =
+          error.code === 'ECONNABORTED' || error.message?.includes('timeout')
+            ? 'Сервер хариулахад удаан байна. 20-30 секунд хүлээгээд дахин оролдоно уу.'
+            : error.response?.data?.message ||
+              error.message ||
+              (error.code === 'ECONNREFUSED' ? 'Backend сервер ажиллахгүй байна.' : 'Бүртгэл үүсгэхэд алдаа гарлаа');
         toast({ title: 'Алдаа', description: errorMessage, variant: 'destructive' });
-        return;
       }
-
-      console.log('Clerk OTP result status:', result.status);
-
-      if (result.status === 'missing_requirements') {
-        console.error('Missing requirements:', JSON.stringify(result, null, 2));
-        toast({
-          title: 'Тохиргооны алдаа гарлаа. Дахин оролдоно уу.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      if (result.status !== 'complete') {
-        console.error('Unexpected Clerk status:', result.status, JSON.stringify(result, null, 2));
-        toast({ title: 'OTP баталгаажуулалт амжилтгүй', variant: 'destructive' });
-        return;
-      }
-
-      try {
-        await createBackendUser();
-      } catch (backendError: unknown) {
-        const be = backendError as { response?: { data?: { message?: string } } };
-        console.error('Backend signup error:', backendError);
-        toast({
-          title: 'Алдаа',
-          description: be.response?.data?.message || 'Бүртгэл хадгалахад алдаа гарлаа',
-          variant: 'destructive',
-        });
-      }
-    } catch (error: unknown) {
-      logClerkError('handleVerifyOtp unexpected', error);
-      toast({
-        title: 'Алдаа',
-        description:
-          (error as { message?: string })?.message || 'Баталгаажуулахад алдаа гарлаа',
-        variant: 'destructive',
-      });
     } finally {
       setLoading(false);
     }
   };
 
-  // ========== RESEND OTP ==========
-  const handleResendOtp = async () => {
-    try {
-      if (!signUpLoaded || !clerkSignUp) return;
-      await clerkSignUp.prepareEmailAddressVerification({ strategy: 'email_code' });
-      toast({ title: 'Код дахин илгээлээ', description: `${email} руу шинэ код илгээлээ` });
-    } catch (err: unknown) {
-      const msg = logClerkError('prepareEmailAddressVerification (resend)', err);
-      toast({
-        title: 'Алдаа',
-        description: msg ?? 'Код илгээхэд алдаа гарлаа. Түр хүлээгээд дахин оролдоно уу.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  // ========== SIGN IN (directly to our backend, no Clerk) ==========
+  // ========== SIGN IN (directly to our backend) ==========
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -371,53 +227,6 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
     }
   };
 
-  // ========== RENDER: OTP Verification Step ==========
-  if (pendingVerification) {
-    return (
-      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className={mobileDialogClassName}>
-          <DialogHeader className="space-y-2 md:space-y-3">
-            <DialogTitle className="text-xl md:text-2xl">Имэйл баталгаажуулалт</DialogTitle>
-            <DialogDescription className="text-sm md:text-base">
-              <span className="font-medium text-[#02111B]">{email}</span> хаяг руу 6 оронтой код илгээлээ.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleVerifyOtp} className="space-y-4 md:space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="otp" className="text-sm md:text-base font-medium">Баталгаажуулах код *</Label>
-              <Input
-                id="otp"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                required
-                placeholder="______"
-                className="h-11 md:h-10 text-base md:text-sm text-center tracking-[0.5em] font-mono"
-                maxLength={6}
-                autoFocus
-              />
-            </div>
-
-            <Button type="submit" className="w-full h-11 md:h-10 text-base md:text-sm font-medium" disabled={loading}>
-              {loading ? 'Шалгаж байна...' : 'Баталгаажуулах'}
-            </Button>
-          </form>
-
-          <div className="text-center pt-2">
-            <button type="button" onClick={handleResendOtp} className="text-sm md:text-base text-gray-600 hover:text-black transition-colors font-medium">
-              Код дахин илгээх
-            </button>
-          </div>
-          <div className="text-center">
-            <button type="button" onClick={() => { setPendingVerification(false); setOtpCode(''); }} className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
-              ← Буцах
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
   // ========== RENDER: Main Sign In / Sign Up Form ==========
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
@@ -426,7 +235,7 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
           <DialogTitle className="text-xl md:text-2xl">{isSignUp ? 'Бүртгүүлэх' : 'Нэвтрэх'}</DialogTitle>
           <DialogDescription className="text-sm md:text-base">
             {isSignUp 
-              ? 'Шинэ бүртгэл үүсгэхийн тулд мэдээллээ оруулна уу. Имэйл баталгаажуулалт шаардлагатай.' 
+              ? 'Шинэ бүртгэл үүсгэхийн тулд нэр, утасны дугаар, 4 оронтой нууц үгээ оруулна уу.' 
               : 'Нэвтрэхийн тулд утасны дугаар болон нууц үгээ оруулна уу'}
           </DialogDescription>
         </DialogHeader>
@@ -442,18 +251,6 @@ export default function AuthModal({ open, onOpenChange, returnFocusRef }: AuthMo
                   onChange={(e) => setName(e.target.value)}
                   required
                   placeholder="Нэр эсвэл байгууллагын нэр"
-                  className="h-11 md:h-10 text-base md:text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm md:text-base font-medium">Имэйл хаяг *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  placeholder="example@gmail.com"
                   className="h-11 md:h-10 text-base md:text-sm"
                 />
               </div>
