@@ -37,6 +37,8 @@ export function getImageUrl(url: string): string {
 /**
  * Return a small Cloudinary thumbnail URL for dense admin grids.
  */
+export const CLOUDINARY_THUMBNAIL_SIZE = 80;
+
 export function getCloudinaryThumbnailUrl(
   url: string,
   dimensions: { width?: number; height?: number } = {}
@@ -46,8 +48,8 @@ export function getCloudinaryThumbnailUrl(
     return imageUrl;
   }
 
-  const width = dimensions.width ?? 256;
+  const width = dimensions.width ?? CLOUDINARY_THUMBNAIL_SIZE;
   const height = dimensions.height ?? width;
-  const transformation = `f_auto,q_auto,c_fill,w_${width},h_${height}`;
+  const transformation = `f_auto,q_auto,c_limit,w_${width},h_${height}`;
   return imageUrl.replace('/upload/', `/upload/${transformation}/`);
 }

@@ -11,7 +11,7 @@ import {
 } from 'react';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
-import { getImageUrl } from '@/lib/image-utils';
+import { getCloudinaryThumbnailUrl, getImageUrl } from '@/lib/image-utils';
 import Loader from '@/components/ui/Loader';
 import { PageLoader, ListItemSkeleton } from '@/components/ui/Loader';
 import api from '@/lib/api';
@@ -983,7 +983,7 @@ export default function AdminOrdersPage() {
                           <div className="relative flex h-[34px] w-[34px] shrink-0 items-center justify-center overflow-hidden rounded-md border border-[#ebebeb] bg-[#f5f5f5]">
                             {mainImg ? (
                               <Image
-                                src={getImageUrl(mainImg.url)}
+                                src={getCloudinaryThumbnailUrl(getImageUrl(mainImg.url))}
                                 alt={product?.name || ''}
                                 fill
                                 className="object-cover"
